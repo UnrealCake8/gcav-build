@@ -31,7 +31,7 @@ cp .env.example .env
 npm start
 ```
 
-Open http://localhost:3000 in Chrome. Open a second tab to test two players. P → Phone displays each number. Dial the other tab's number, answer, record, then stop and send. Confirm the other tab can play it. The host browser also needs to enter the city; merely starting the server does not join as a player.
+Open http://localhost:3000 in Chrome. Open a second tab to test two players. P → Phone displays each number. Dial the other tab's number, answer, hold Talk (or V), speak, then release. Confirm the other tab hears you automatically. If necessary, press Enable call audio. The host browser also needs to enter the city; merely starting the server does not join as a player.
 
 ## 3. Create the tunnel
 

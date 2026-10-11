@@ -1,3 +1,4 @@
+import {validOutfit} from '../src/outfits.js';
 import http from 'node:http';
 import {randomUUID,randomBytes} from 'node:crypto';
 import {readFile} from 'node:fs/promises';
@@ -37,9 +38,10 @@ export function createGameServer({origins=[],maxPlayers=16,clipTTL=TTL,ringTimeo
  }catch{if(!res.headersSent)json(res,500,{error:'Request failed'});else res.end();}});
  const wss=new WebSocketServer({noServer:true,maxPayload:2048});
  server.on('upgrade',(req,socket,head)=>{if(req.url!=='/multiplayer'||!origins.includes(req.headers.origin)){socket.write('HTTP/1.1 403 Forbidden\r\n\r\n');socket.destroy();return;}if(clients.size>=maxPlayers){socket.write('HTTP/1.1 503 Service Unavailable\r\n\r\n');socket.destroy();return;}wss.handleUpgrade(req,socket,head,ws=>wss.emit('connection',ws,req));});
- wss.on('connection',ws=>{const p={ws,id:randomUUID(),token:randomBytes(32).toString('hex'),number:String(++phoneNumber),name:'Player',joined:false,x:8,z:12,yaw:0,vehicle:false,lastMove:Date.now(),lastChat:0,lastClip:0,lastDial:0,count:0,window:Date.now(),alive:true,callId:null};clients.set(ws,p);tokens.set(p.token,p);send(ws,{type:'welcome',id:p.id,number:p.number,token:p.token});ws.on('pong',()=>p.alive=true);
+ wss.on('connection',ws=>{const p={ws,id:randomUUID(),token:randomBytes(32).toString('hex'),number:String(++phoneNumber),name:'Player',joined:false,x:8,z:12,yaw:0,vehicle:false,outfit:'street',lastMove:Date.now(),lastChat:0,lastClip:0,lastDial:0,count:0,window:Date.now(),alive:true,callId:null};clients.set(ws,p);tokens.set(p.token,p);send(ws,{type:'welcome',id:p.id,number:p.number,token:p.token});ws.on('pong',()=>p.alive=true);
  ws.on('message',raw=>{try{const now=Date.now();if(now-p.window>1000){p.window=now;p.count=0;}if(++p.count>40){ws.close(1008,'Rate limit');return;}const m=JSON.parse(raw);
- if(m.type==='join'){p.name=String(m.name||'Player').replace(/[\x00-\x1f]/g,'').slice(0,20);p.joined=true;}
+ if(m.type==='join'){p.name=String(m.name||'Player').replace(/[\x00-\x1f]/g,'').slice(0,20);if(validOutfit(m.outfit))p.outfit=m.outfit;p.joined=true;}
+ if(m.type==='outfit'&&p.joined&&validOutfit(m.outfit))p.outfit=m.outfit;
  if(m.type==='move'&&p.joined){if(![m.x,m.z,m.yaw].every(Number.isFinite)||Math.abs(m.x)>148||Math.abs(m.z)>148)return;const dt=Math.max(.08,(now-p.lastMove)/1000);if(Math.hypot(m.x-p.x,m.z-p.z)>35*dt+3)return;p.x=m.x;p.z=m.z;p.yaw=m.yaw%(2*Math.PI);p.vehicle=!!m.vehicle;p.lastMove=now;}
  if(m.type==='reset'&&p.joined){p.x=8;p.z=12;p.yaw=0;p.vehicle=false;p.lastMove=now;}
  if(m.type==='chat'&&p.joined&&now-p.lastChat>=800){p.lastChat=now;const text=String(m.text||'').trim().slice(0,240);if(text)for(const [other,q]of clients)if(q.joined)send(other,{type:'chat',name:p.name,text});}
@@ -49,7 +51,7 @@ export function createGameServer({origins=[],maxPlayers=16,clipTTL=TTL,ringTimeo
  if(m.type==='hangup'){const c=calls.get(m.callId);if(participant(p,c))endCall(c,'Call ended');}
  }catch{ws.close(1007,'Invalid message');}});
  ws.on('close',()=>{endCall(calls.get(p.callId),'Player disconnected');clients.delete(ws);tokens.delete(p.token);});ws.on('error',()=>{});});
- const tick=setInterval(()=>{const players=[...clients.values()].filter(p=>p.joined).map(({id,name,number,x,z,yaw,vehicle})=>({id,name,number,x,z,yaw,vehicle}));for(const [ws,p]of clients)if(p.joined)send(ws,{type:'state',players});},80);
+ const tick=setInterval(()=>{const players=[...clients.values()].filter(p=>p.joined).map(({id,name,number,x,z,yaw,vehicle,outfit})=>({id,name,number,x,z,yaw,vehicle,outfit}));for(const [ws,p]of clients)if(p.joined)send(ws,{type:'state',players});},80);
  const ping=setInterval(()=>{for(const [ws,p]of clients){if(!p.alive){ws.terminate();continue;}p.alive=false;ws.ping();}},30000);
  const cleanup=setInterval(()=>{for(const[id,c]of clips)if(Date.now()>c.expires)dropClip(id);},1000);
  return{server,wss,close:async()=>{clearInterval(tick);clearInterval(ping);clearInterval(cleanup);for(const c of calls.values())clearTimeout(c.timer);for(const ws of clients.keys())ws.terminate();await new Promise(r=>wss.close(r));await new Promise(r=>server.close(r));}};
