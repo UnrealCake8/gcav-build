@@ -8,3 +8,10 @@
 #world{user-select:none;-webkit-user-select:none}#actions{flex-wrap:wrap;justify-content:flex-end;max-width:calc(100vw - 28px)}@media(pointer:coarse){#actions{max-width:70vw}#touch{left:max(16px,env(safe-area-inset-left));bottom:210px}}@media(max-height:500px){#welcome{top:82px;bottom:12px;overflow:auto;padding:16px}#welcome h1{font-size:36px;margin:12px 0}#welcome p{margin:8px 0}#welcome label{margin:10px 0}#welcome small{margin-top:10px}#mission{max-width:230px;font-size:11px}#minimap{width:85px;height:85px;bottom:60px}#touch{bottom:155px}#touchBrake{bottom:100px}#phone{height:calc(100dvh - 85px);bottom:55px}#phoneContent{height:calc(100% - 90px)}#pttPanel{top:80px;padding:8px;max-width:180px}}
 
 #mapCredit{position:fixed;bottom:3px;left:8px;z-index:10;font:8px Arial;color:#c8d3d2;background:#172732bb;padding:3px;text-decoration:none}
+
+/* Keep the phone above game controls and fit its scroll area to every viewport. */
+#phone{z-index:40;display:flex;flex-direction:column;height:min(570px,calc(100dvh - 105px));max-width:calc(100vw - 24px)}
+.phonebar{flex:0 0 auto}#phoneContent{height:auto;flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;padding:20px 0 42px}
+#phoneContent .life-role{margin:0 0 14px}#phoneContent .life-role button{display:block;width:100%;text-align:left}#phoneContent .life-role small{display:block;margin:6px 4px;color:#c4d6d9;line-height:1.5}
+#phoneContent select{font:inherit;width:100%;margin-top:8px;padding:10px;border:1px solid #ffffff40;border-radius:6px;background:#172b33;color:white}
+@media(max-height:500px){#phone{height:calc(100dvh - 85px)}}
