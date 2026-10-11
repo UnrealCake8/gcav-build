@@ -101,3 +101,12 @@ This is a playable geographic scaffold: mapped highways and researched landmark 
 ### Phone correction
 
 Player transfers now live in the separate **hPay** phone app; Bank contains the balance and transaction history. Landmark buttons are created once when opening Maps. The frame refresh redraws only map canvases, so it cannot append waypoints to Home or other apps. Road asphalt and lane paint use separated elevations and ordered rendering without competing depth writes to reduce flicker at overlapping road segments. Ground coverage now includes paving, parking and green spaces rather than blanket sand.
+
+
+## Navigation and real estate
+
+The phone Maps app supports searching landmarks and property listings, calculating a route over the existing OpenStreetMap road polylines, and showing the route on the phone map and in the 3D world with next-turn HUD guidance. No external routing API key is required.
+
+Real Estate includes starter apartment and house listings priced in in-game AED. Players can buy permanently or rent for seven real-world days. Agreements and payment entries use the existing wallet persistence; the server validates funds, listing availability and property entry. Owned/rented properties can be entered using the existing interior scene.
+
+Run `npm test` and `npm run build` to verify the change.

@@ -1,0 +1,5 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {createWalletStore} from './wallet-store.js';
+test('a purchased property is unavailable to other players',()=>{const store=createWalletStore(),a=store.open(),b=store.open(),listing={id:'test-flat',name:'Test Flat',kind:'apartment',buyPrice:200,rentPrice:50};const result=store.acquireProperty(a,listing,'buy',1000);assert.equal(result.ok,true);assert.equal(a.balance,300);assert.equal(store.acquireProperty(b,listing,'rent',1000).ok,false);});
+test('rental agreements expire after seven days',()=>{const store=createWalletStore(),a=store.open(),b=store.open(),listing={id:'test-rental',name:'Test Rental',kind:'house',buyPrice:200,rentPrice:50};const result=store.acquireProperty(a,listing,'rent',1000);assert.equal(result.ok,true);assert.equal(result.agreement.expiresAt,1000+7*24*60*60*1000);assert.equal(store.acquireProperty(b,listing,'rent',1000).ok,false);assert.equal(store.acquireProperty(b,listing,'rent',1000+7*24*60*60*1000+1).ok,true);});
