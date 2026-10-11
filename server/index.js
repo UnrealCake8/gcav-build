@@ -1,3 +1,4 @@
+import {insideWorld} from '../src/world-layout.js';
 import {validOutfit} from '../src/outfits.js';
 import http from 'node:http';
 import {randomUUID,randomBytes} from 'node:crypto';
@@ -42,7 +43,7 @@ export function createGameServer({origins=[],maxPlayers=16,clipTTL=TTL,ringTimeo
  ws.on('message',raw=>{try{const now=Date.now();if(now-p.window>1000){p.window=now;p.count=0;}if(++p.count>40){ws.close(1008,'Rate limit');return;}const m=JSON.parse(raw);
  if(m.type==='join'){p.name=String(m.name||'Player').replace(/[\x00-\x1f]/g,'').slice(0,20);if(validOutfit(m.outfit))p.outfit=m.outfit;p.joined=true;}
  if(m.type==='outfit'&&p.joined&&validOutfit(m.outfit))p.outfit=m.outfit;
- if(m.type==='move'&&p.joined){if(![m.x,m.z,m.yaw].every(Number.isFinite)||Math.abs(m.x)>148||Math.abs(m.z)>148)return;const dt=Math.max(.08,(now-p.lastMove)/1000);if(Math.hypot(m.x-p.x,m.z-p.z)>35*dt+3)return;p.x=m.x;p.z=m.z;p.yaw=m.yaw%(2*Math.PI);p.vehicle=!!m.vehicle;p.lastMove=now;}
+ if(m.type==='move'&&p.joined){if(![m.x,m.z,m.yaw].every(Number.isFinite)||!insideWorld(m.x,m.z))return;const dt=Math.max(.08,(now-p.lastMove)/1000);if(Math.hypot(m.x-p.x,m.z-p.z)>35*dt+3)return;p.x=m.x;p.z=m.z;p.yaw=m.yaw%(2*Math.PI);p.vehicle=!!m.vehicle;p.lastMove=now;}
  if(m.type==='reset'&&p.joined){p.x=8;p.z=12;p.yaw=0;p.vehicle=false;p.lastMove=now;}
  if(m.type==='chat'&&p.joined&&now-p.lastChat>=800){p.lastChat=now;const text=String(m.text||'').trim().slice(0,240);if(text)for(const [other,q]of clients)if(q.joined)send(other,{type:'chat',name:p.name,text});}
  if(m.type==='dial'&&p.joined){if(now-p.lastDial<2000){send(ws,{type:'call-error',message:'Wait before calling again'});return;}p.lastDial=now;const other=[...clients.values()].find(q=>q.joined&&q.number===String(m.number));if(!other||other===p||other.callId||p.callId){send(ws,{type:'call-error',message:!other?'Player is offline or number not found':'Line busy'});return;}

@@ -1,6 +1,6 @@
 # Grand Chamak Auto — browser build
 
-Original procedural waterfront game inspired by the provided reference footage. Includes walking/driving, a delivery mission, phone apps, multiplayer presence, room text chat and private push-to-talk calls.
+Procedural browser city with connected Waterfront and Downtown Dubai-inspired districts. Includes walking/driving, a delivery mission, phone apps, multiplayer presence, room text chat and private push-to-talk calls.
 
 ## Run on Mac
 
@@ -22,6 +22,12 @@ For internet access behind CGNAT, follow [Mac hosting instructions](docs/MAC_HOS
 ## Controls
 
 WASD: move/drive. E: enter/exit the white car. P: phone. Space: brake. Drag: camera. C / Camera: recenter behind your avatar or car. Scroll or pinch with two fingers on the world: zoom. Forward follows the camera on foot; the driving camera gently follows the car after you stop looking around. Walls shorten the camera distance. On touch screens, an analogue joystick controls walking/driving; a separate Brake button stops the car. Drag the world with another finger to move the camera. Jobs → Waterfront delivery triggers a scripted text mission call. Collect the green marker then reach the amber marker for AED 150.
+
+## City and walking
+
+Drive north on the avenues at x = -105, 0 or 105 to reach Downtown. The central Downtown boulevard sits at z = -270, with towers, a landmark plaza and a fountain. These are stylised procedural districts, not geographically accurate replicas. The minimap and Phone → Maps show the expanded city; the location label changes by district.
+
+Walking uses distance-driven arm/leg swings, knee bends and a small body bob on both local and remote avatars. Stopping or walking into a building settles to idle; entering a car pauses the gait. Textures are generated locally and repeated scenery uses instanced meshes. No external map assets are required.
 
 ## Outfits
 
