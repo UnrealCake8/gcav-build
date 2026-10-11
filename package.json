@@ -6,7 +6,7 @@
   "scripts": {
     "build": "esbuild src/game.js --bundle --minify --outfile=dist/game.js",
     "server": "node --env-file-if-exists=.env server/index.js",
-    "test": "node --test server/server.test.js",
+    "test": "node --test server/*.test.js",
     "start": "node --env-file-if-exists=.env server/index.js"
   },
   "keywords": [],

@@ -21,7 +21,7 @@ For internet access behind CGNAT, follow [Mac hosting instructions](docs/MAC_HOS
 
 ## Controls
 
-WASD: move/drive. E: enter/exit the white car. P: phone. Space: brake. Drag: camera. On touch screens, an analogue joystick controls walking/driving; a separate Brake button stops the car. Drag the world with another finger to move the camera. Jobs → Waterfront delivery triggers a scripted text mission call. Collect the green marker then reach the amber marker for AED 150.
+WASD: move/drive. E: enter/exit the white car. P: phone. Space: brake. Drag: camera. C / Camera: recenter behind your avatar or car. Scroll or pinch with two fingers on the world: zoom. Forward follows the camera on foot; the driving camera gently follows the car after you stop looking around. Walls shorten the camera distance. On touch screens, an analogue joystick controls walking/driving; a separate Brake button stops the car. Drag the world with another finger to move the camera. Jobs → Waterfront delivery triggers a scripted text mission call. Collect the green marker then reach the amber marker for AED 150.
 
 ## Outfits
 
