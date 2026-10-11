@@ -107,6 +107,6 @@ Player transfers now live in the separate **hPay** phone app; Bank contains the 
 
 The phone Maps app supports searching landmarks and property listings, calculating a route over the existing OpenStreetMap road polylines, and showing the route on the phone map and in the 3D world with next-turn HUD guidance. No external routing API key is required.
 
-Real Estate includes starter apartment and house listings priced in in-game AED. Players can buy permanently or rent for seven real-world days. Agreements and payment entries use the existing wallet persistence; the server validates funds, listing availability and property entry. Owned/rented properties can be entered using the existing interior scene.
+Real Estate includes starter apartment and house listings priced in in-game AED. Players can buy permanently or rent for 30 real-world days. Private landlords can set or change their own monthly asking rent; tenants can request a renewal, and the landlord must explicitly accept it before another 30-day term is charged. Rental income and payments are recorded in the existing wallet ledger. Server-side checks validate ownership, prices, availability, balance and property entry. Owned/rented properties can be entered using the existing interior scene.
 
 Run `npm test` and `npm run build` to verify the change.
