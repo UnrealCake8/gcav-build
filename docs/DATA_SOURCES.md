@@ -31,3 +31,9 @@ A same-direction Al Safa North/South passage within one real hour produces one c
 ## Attached terrain scaffold
 
 The supplied `terrain.3mf` contains six meshes, about 140,190 vertices and 267,747 triangles, in millimetres. It has no latitude/longitude metadata. It has not been added to the game or used to place real roads. Importing it later needs a known geographic area, at least two reference coordinates, geometry optimisation and collision preparation.
+
+## Landmark anchors (11 October 2026)
+
+`src/data/dubai-landmarks.json` records coordinates and source IDs. Five anchors are the arithmetic mean of nodes returned by the OpenStreetMap API `/api/0.6/way/{id}/full.json`: Burj Khalifa 446646206; Mall of the Emirates 175115425; Museum of the Future 1054289435; Dubai Frame 386649647; Burj Al Arab 12700546. This representative point is not a surveyed entrance. OSM © contributors, ODbL; existing in-game attribution remains visible.
+
+Dubai Mall uses an approximate POI coordinate 25.198518, 55.279619 from https://www.gps-latitude-longitude.com/gps-coordinates-of-dubai-mall (also corroborated by https://www.coordinatesfinder.com/coordinates/93945-dubai-mall). It is explicitly labeled approximate in the data. Mall geometry is compressed to keep imported highway paths clear. All rendered models/footprints, entrance locations, sidewalks, parking and local connectors are authored approximations, not imported cadastral or architectural data. Height is scaled for gameplay; Burj Khalifa's simplified 207-unit tower represents 828 metres at quarter scale.

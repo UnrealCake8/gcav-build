@@ -73,3 +73,27 @@ The server binds to 127.0.0.1 by default. `ALLOWED_ORIGINS` controls WebSocket u
 ## Current limits
 
 This is an early playable foundation, not a finished production game. Session names are unverified; phone numbers are not account identities. Bank and delivery stages are server-owned and saved locally on the host. Movement and vehicle flags are still supplied by clients, so a modified client can cheat movement/tolls. Movement has basic speed/bounds guards, not authoritative physics. Players use individual white cars; other players see a blue representation. For wider release, add persistent accounts, authoritative physics and blocking/reporting/moderation. The server validates audio MIME labels/bytes, not decoded audio duration; the 15-second duration cap is enforced by the client.
+
+## Dubai city life update
+
+A server-shared 24-minute day/night cycle starts at 09:00 when the server boots. The sky, sunlight and emissive street lights/windows change over time. The phone shows accelerated **game time**; Salik still uses actual Dubai time, not this cycle.
+
+Phone **Maps** lists six geographic landmark anchors: Burj Khalifa, Dubai Mall, Mall of the Emirates, Museum of the Future, Dubai Frame and Burj Al Arab. Set a waypoint, travel there, approach the green entrance ring on foot and press **E / Interact**. Interior rooms are shared by players visiting the same landmark. Press Interact away from the exit to open shops; approach the exit ring to leave. Buildings have wider spacing, parking pads, local access lanes and street lamps.
+
+Phone **City Life** chooses a persistent role:
+
+| Role | Gameplay |
+| --- | --- |
+| Civilian | Explore, meet players, buy items and transfer money. |
+| Courier | Existing parcel jobs pay AED 150 per completed delivery. |
+| Shop worker | Stay in a shop for a 60-second shift to earn AED 25. POS sells coffee, lunch or souvenirs to another nearby player. |
+| Police | Start a 120-second patrol and travel at least 80 game metres to earn AED 60. Arrest wanted players on foot within 8 game metres in the same space. |
+| Criminal | Rob a shop for AED 80; creates a persistent wanted flag and a 180-second robbery cooldown. |
+
+An arrested player enters custody for 120 real seconds, or pays AED 100 bail in City Life. Insufficient funds never produce a bail debit. Custody persists across reconnects, expires automatically, and cannot be escaped with Reset or a role change. These are fictional game rules, not Dubai law. Police do not receive cash for arrests.
+
+**POS:** shop worker enters the customer's phone number and selects a catalog item. Both players must be in the same shop within 8 game metres. The customer must approve the 30-second checkout. Payment transfers to the worker and the item enters the customer's bag; decline/expiry makes no payment. Sales and salaries appear in the bank ledger.
+
+**Bank transfers:** Bank → enter an online player's phone number and AED amount → review recipient → Send. Server rejects self-transfers, insufficient funds, invalid amounts and duplicate request IDs. Transfers and POS update both balances in one persisted write. Salaries require an active shift; leaving or disconnecting cancels it. Game accounts are still anonymous browser wallet keys, so production needs authenticated accounts and stronger authoritative movement/economy controls.
+
+This is a playable geographic scaffold: mapped highways and researched landmark positions at 25% horizontal scale. Landmark meshes, footprints, entrances, parking, local connectors and interiors are stylised approximations. Generic rooms are not reconstructions of real mall layouts. It does not yet contain all Dubai buildings, minor roads, metro service, coastline, functional ramps, NPC traffic or the complete city. Test lighting, touch controls and performance on your target phones/tablets; automated checks do not replace GPU/device visual testing.
