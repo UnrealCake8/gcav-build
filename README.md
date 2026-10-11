@@ -23,11 +23,23 @@ For internet access behind CGNAT, follow [Mac hosting instructions](docs/MAC_HOS
 
 WASD: move/drive. E: enter/exit the white car. P: phone. Space: brake. Drag: camera. C / Camera: recenter behind your avatar or car. Scroll or pinch with two fingers on the world: zoom. Forward follows the camera on foot; the driving camera gently follows the car after you stop looking around. Walls shorten the camera distance. On touch screens, an analogue joystick controls walking/driving; a separate Brake button stops the car. Drag the world with another finger to move the camera. Jobs → Waterfront delivery triggers a scripted text mission call. Collect the green marker then reach the amber marker for AED 150.
 
-## City and walking
+## Geographic roads and Salik
 
-Drive north on the avenues at x = -105, 0 or 105 to reach Downtown. The central Downtown boulevard sits at z = -270, with towers, a landmark plaza and a fountain. These are stylised procedural districts, not geographically accurate replicas. The minimap and Phone → Maps show the expanded city; the location label changes by district.
+The game now uses a bundled OpenStreetMap snapshot of 241 regional highway/trunk road pieces, including Sheikh Zayed Road and Al Khail Road. Road centre-lines, names and refs come from actual coordinates, compressed to 25% horizontal scale for driving. Follow the Downtown access road from the starting plaza onto the highway network. The minimap follows you; Phone → Maps shows the full snapshot. Orange dots are Salik gantries.
 
-Walking uses distance-driven arm/leg swings, knee bends and a small body bob on both local and remote avatars. Stopping or walking into a building settles to idle; entering a car pauses the gait. Textures are generated locally and repeated scenery uses instanced meshes. No external map assets are required.
+Ten OSM gantry nodes represent five named gate locations: Al Barsha, Al Safa North/South, Al Garhoud Bridge and Business Bay Crossing. Driving through them automatically debits the in-game bank. Peak, off-peak, free-hours, VAT and the linked Al Safa rule use the server's Asia/Dubai clock. See [data sources and limitations](docs/DATA_SOURCES.md). Buildings and terrain are still procedural, and interchanges are flattened; this is a geographic backbone rather than a finished Dubai reconstruction.
+
+Walking uses distance-driven arm/leg swings, knee bends and a small body bob on local and remote avatars. Stopping or walking into a building settles to idle; entering a car pauses the gait. Repeated roads/building details use instanced meshes and textures are generated locally.
+
+## In-game bank
+
+The server grants a new anonymous wallet AED 500 of game credit. Salik deductions and AED 150 delivery rewards are calculated on the server. Bank shows a dated ledger, gate name, direction and VAT breakdown. The wallet may go negative for tolls; this is a game overdraft, not real financial behaviour.
+
+When launched with `npm start`, wallets are saved in `data/wallets.json`, including job stage and linked-gate history. Back up this folder and keep it private. A wallet recovery key is kept in browser localStorage. Tabs in the same browser share that wallet; a private window or another browser creates a separate player wallet. Clearing localStorage loses access to the old wallet. This is anonymous session recovery, not an account/login system. Names are unverified and new-wallet welcome credit can be abused until proper accounts are added.
+
+`SALIK_RAMADAN` and `SALIK_SPECIAL_DAY` in `.env` let the host select exceptional schedules. Restart after changing them. These are in-game deductions only; the game does not connect to real banks or Salik accounts.
+
+To refresh road data on a Mac with Python 3: `python3 scripts/import-dubai.py`, review the snapshot changes, then `npm run build`. The importer also accepts saved raw inputs using `--roads-json` and `--nodes-json`. Geography can change; do not refresh a live server without testing the new snapshot.
 
 ## Outfits
 
@@ -60,4 +72,4 @@ The server binds to 127.0.0.1 by default. `ALLOWED_ORIGINS` controls WebSocket u
 
 ## Current limits
 
-This is an early playable foundation, not a finished production game. Session names are unverified; phone numbers are not account identities. Jobs and money remain browser-side, saved locally. Movement has basic speed/bounds guards, not authoritative physics. Players use individual white cars; other players see a blue representation. For wider release, add persistent accounts, server-owned progress/physics and blocking/reporting/moderation. The server validates audio MIME labels/bytes, not decoded audio duration; the 15-second duration cap is enforced by the client.
+This is an early playable foundation, not a finished production game. Session names are unverified; phone numbers are not account identities. Bank and delivery stages are server-owned and saved locally on the host. Movement and vehicle flags are still supplied by clients, so a modified client can cheat movement/tolls. Movement has basic speed/bounds guards, not authoritative physics. Players use individual white cars; other players see a blue representation. For wider release, add persistent accounts, authoritative physics and blocking/reporting/moderation. The server validates audio MIME labels/bytes, not decoded audio duration; the 15-second duration cap is enforced by the client.

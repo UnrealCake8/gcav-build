@@ -102,3 +102,9 @@ Keep `.env` local. The repo ignores it.
 - Clip received but no sound: press Play; try Chrome at both ends and check microphone input.
 - Another player cannot join: server cap is 16 simultaneous WebSocket connections, including extra tabs.
 - Calls end on disconnect: intended behaviour; this version does not resume voice calls after reconnect.
+
+## Save bank data
+
+The server creates `data/wallets.json` for bank balances, delivery stages and toll history. Keep this folder when pulling updates and back it up. Do not put it in GitHub or a publicly served folder. The static server does not expose it. A new wallet starts with AED 500 game credit; old browser-side balances are not imported.
+
+After updating this version, open Phone → Bank for the ledger. Orange points on Phone → Maps mark Salik gantries. Follow the access road from the plaza to reach the real-coordinate highway network.

@@ -2,7 +2,7 @@ import * as T from 'three';
 import {roads} from './world-layout.js';
 // Deterministic, local textures and instanced props keep the city usable on tablets.
 function random(seed=9217){return()=>{seed=(seed*1664525+1013904223)>>>0;return seed/4294967296;};}
-function surface(kind){const c=document.createElement('canvas');c.width=c.height=256;const ctx=c.getContext('2d'),rng=random();ctx.fillStyle={asphalt:'#505458',sand:'#dcc99f',paving:'#b8b6ad',windows:'#647f8b'}[kind];ctx.fillRect(0,0,256,256);
+export function surface(kind){const c=document.createElement('canvas');c.width=c.height=256;const ctx=c.getContext('2d'),rng=random();ctx.fillStyle={asphalt:'#505458',sand:'#dcc99f',paving:'#b8b6ad',windows:'#647f8b'}[kind];ctx.fillRect(0,0,256,256);
  if(kind==='windows'){for(let y=0;y<256;y+=32)for(let x=0;x<256;x+=32){ctx.fillStyle=rng()>.75?'#d4c7a3':rng()>.5?'#536f7e':'#7c98a2';ctx.fillRect(x+3,y+3,25,27);ctx.fillStyle='#b5b3a6';ctx.fillRect(x,y,2,32);ctx.fillRect(x,y,32,2);}}
  else{for(let i=0;i<8000;i++){ctx.fillStyle=rng()>.5?'#ffffff12':'#00000015';const x=rng()*256,y=rng()*256;ctx.fillRect(x,y,kind==='sand'?2:1,1);}if(kind==='paving'){ctx.strokeStyle='#8f918c';ctx.lineWidth=1;for(let y=0;y<=256;y+=32){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(256,y);ctx.stroke();for(let x=(y%64?16:0);x<256;x+=32){ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x,y+32);ctx.stroke();}}}}
  const texture=new T.CanvasTexture(c);texture.colorSpace=T.SRGBColorSpace;texture.wrapS=texture.wrapT=T.RepeatWrapping;texture.repeat.set(kind==='windows'?2:12,kind==='windows'?4:12);texture.anisotropy=4;return texture;}
