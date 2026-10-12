@@ -18,6 +18,7 @@ export async function renderAccount(container,escapeHtml){
   try{
     const supabase=await getClient();
     const{data:{session}}=await supabase.auth.getSession();
+    root.innerHTML='';
     if(!session){
       root.insertAdjacentHTML('beforeend',`<div class="card"><b>Save your account and online wallet</b><p>Sign in to see your cloud balance. New accounts start with AED 500.</p><label>Email<input id="accountEmail" type="email" autocomplete="email" maxlength="254"></label><label>Password<input id="accountPassword" type="password" autocomplete="current-password" minlength="8"></label><label>Player name<input id="accountName" maxlength="20" autocomplete="nickname"></label><button id="accountSignIn">Sign in</button> <button id="accountSignUp">Create account</button><p id="accountStatus" role="status"></p></div>`);
       const status=root.querySelector('#accountStatus');
@@ -53,6 +54,7 @@ export async function renderAccount(container,escapeHtml){
     }
     root.querySelector('#accountSignOut').onclick=async()=>{await supabase.auth.signOut();await renderAccount(container,escapeHtml);};
   }catch(error){
+    root.innerHTML='';
     root.insertAdjacentHTML('beforeend',`<div class="card"><b>Account unavailable</b><p>${escapeHtml(error.message||'Please try again later.')}</p></div>`);
   }
 }
