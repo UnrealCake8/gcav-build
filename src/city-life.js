@@ -1,6 +1,6 @@
 import data from './data/dubai-landmarks.json' with {type:'json'};
 import {project} from './road-network.js';
-const details={ 'burj-khalifa':['Burj Khalifa','tower',24,24,207], 'dubai-mall':['Dubai Mall','mall',40,32,12], 'mall-emirates':['Mall of the Emirates','mall',100,70,12], 'museum-future':['Museum of the Future','museum',35,25,20], 'dubai-frame':['Dubai Frame','frame',38,12,38], 'burj-arab':['Burj Al Arab','hotel',28,22,80] };
+const details={ 'burj-khalifa':['Burj Khalifa','tower',24,24,828], 'dubai-mall':['Dubai Mall','mall',40,32,12], 'mall-emirates':['Mall of the Emirates','mall',40,32,12], 'museum-future':['Museum of the Future','museum',35,25,20], 'dubai-frame':['Dubai Frame','frame',38,12,38], 'burj-arab':['Burj Al Arab','hotel',28,22,80] };
 export const landmarks=data.landmarks.map(p=>{const [name,kind,w,d,h]=details[p.id];const {x,z}=project(p.lon,p.lat);return {...p,name,kind,w,d,h,x,z,entrance:{x:x+w/2+5,z}};});
 export const roles=[{id:'resident',name:'Civilian',description:'Explore, meet players and shop.'},{id:'courier',name:'Delivery courier',description:'Collect parcels and earn delivery rewards.'},{id:'police',name:'Police officer',description:'Patrol for a salary and arrest wanted players.'},{id:'criminal',name:'Criminal',description:'Risk a shop robbery, arrest and bail.'},{id:'retail',name:'Shop worker',description:'Work a 60-second shop shift for AED 25.'}];
 export const validRole=id=>roles.some(r=>r.id===id);

@@ -96,12 +96,21 @@ An arrested player enters custody for 120 real seconds, or pays AED 100 bail in 
 
 **Bank transfers:** Bank → enter an online player's phone number and AED amount → review recipient → Send. Server rejects self-transfers, insufficient funds, invalid amounts and duplicate request IDs. Transfers and POS update both balances in one persisted write. Salaries require an active shift; leaving or disconnecting cancels it. Game accounts are still anonymous browser wallet keys, so production needs authenticated accounts and stronger authoritative movement/economy controls.
 
-This is a playable geographic scaffold: mapped highways and researched landmark positions at 25% horizontal scale. Landmark meshes, footprints, entrances, parking, local connectors and interiors are stylised approximations. Generic rooms are not reconstructions of real mall layouts. It does not yet contain all Dubai buildings, minor roads, metro service, coastline, functional ramps, NPC traffic or the complete city. Test lighting, touch controls and performance on your target phones/tablets; automated checks do not replace GPU/device visual testing.
+This is a playable geographic scaffold: mapped highways and researched landmark positions at metre scale. Landmark meshes, footprints, entrances, parking, local connectors and interiors are stylised approximations. Generic rooms are not reconstructions of real mall layouts. It does not yet contain all Dubai buildings, minor roads, metro service, coastline, functional ramps, NPC traffic or the complete city. Test lighting, touch controls and performance on your target phones/tablets; automated checks do not replace GPU/device visual testing.
 
 ### Phone correction
 
 Player transfers now live in the separate **hPay** phone app; Bank contains the balance and transaction history. Landmark buttons are created once when opening Maps. The frame refresh redraws only map canvases, so it cannot append waypoints to Home or other apps. Road asphalt and lane paint use separated elevations and ordered rendering without competing depth writes to reduce flicker at overlapping road segments. Ground coverage now includes paving, parking and green spaces rather than blanket sand.
 
+## Dubai accuracy pass — 12 October 2026
+
+Geographic coordinates now use **one world unit per metre**, replacing the earlier 25% distance compression. Highway widths use 3.5 metres per mapped lane (capped at 30 metres); this is a rendering estimate, not measured carriageway width. The simplified Burj Khalifa model is now 828 metres high; its exterior/footprint and other landmark meshes remain stylised.
+
+Imported **95 building outlines** and **394 outdoor street ways** from partial Downtown and Al Barsha / Mall of the Emirates OSM extracts. Buildings use actual outline polygons for rendering, collision and the phone map. Heights: 43 tagged heights, 9 estimates from tagged floor counts, 43 explicit 10-metre fallback heights. Selected landmark buildings use the existing stylised meshes to avoid duplicates; generic buildings remain outside imported neighbourhoods. Indoor parking ways are excluded rather than flattened onto outdoor roads.
+
+This establishes geographic scale and two building-data samples along the agreed Dubai corridor. It is **not a complete Dubai replica**. Imported bridge/layer tags remain metadata; roads still render at ground level until measured elevation profiles and ramp topology are available. Missing minor streets, building relations/holes, terrain, coastline and interiors need further datasets and work. OSM layer tags must never be treated as measured road heights. Existing OSM toll-gate coordinates and server-owned billing remain; the snapshot covers five logical Salik gate locations, not all Dubai gates.
+
+Reproduce outlines/streets with `python scripts/import-buildings.py AREA.json AREA2.json`, using cached OSM map API responses. The initial extracts used bounding boxes `55.270,25.195,55.281,25.202` and `55.198,25.116,55.205,25.121`.
 
 ## Navigation and real estate
 
@@ -110,3 +119,4 @@ The phone Maps app supports searching landmarks and property listings, calculati
 Real Estate includes starter apartment and house listings priced in in-game AED. Players can buy permanently or rent for 30 real-world days. Private landlords can set or change their own monthly asking rent; tenants can request a renewal, and the landlord must explicitly accept it before another 30-day term is charged. Rental income and payments are recorded in the existing wallet ledger. Server-side checks validate ownership, prices, availability, balance and property entry. Owned/rented properties can be entered using the existing interior scene.
 
 Run `npm test` and `npm run build` to verify the change.
+

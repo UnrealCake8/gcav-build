@@ -37,7 +37,7 @@ for n in nodes:
  if n['id']==1061530398:name='Al Safa North'
  gates.append({'id':str(n['id']),'name':name,'osmName':original,'logicalId':name.lower().replace(' ','-'),'group':'safa' if 'Safa' in name else None,'lon':n['lon'],'lat':n['lat']})
 if not gates:raise RuntimeError('No gates; existing snapshot left unchanged')
-retrieved=time.strftime('%Y-%m-%d',time.gmtime());data={'source':'OpenStreetMap contributors','license':'ODbL-1.0','attribution':'https://www.openstreetmap.org/copyright','retrieved':retrieved,'osmTimestamp':raw['osm3s']['timestamp_osm_base'],'queryBounds':[55.18,25.11,55.36,25.24],'projection':{'origin':[55.2744,25.1972],'horizontalScale':0.25},'roads':ways}
+retrieved=time.strftime('%Y-%m-%d',time.gmtime());data={'source':'OpenStreetMap contributors','license':'ODbL-1.0','attribution':'https://www.openstreetmap.org/copyright','retrieved':retrieved,'osmTimestamp':raw['osm3s']['timestamp_osm_base'],'queryBounds':[55.18,25.11,55.36,25.24],'projection':{'origin':[55.2744,25.1972],'horizontalScale':1},'roads':ways}
 for file,payload in [('dubai-roads.json',data),('dubai-gates.json',{'source':'OpenStreetMap contributors','license':'ODbL-1.0','retrieved':retrieved,'gates':gates})]:
  target=root/'src/data'/file;target.parent.mkdir(exist_ok=True);temp=target.with_suffix('.tmp');temp.write_text(json.dumps(payload,separators=(',',':'))+'\n');temp.replace(target)
 print(f'Saved {len(ways)} road pieces and {len(gates)} gantry nodes. Review changed geography and gate labels before rebuilding.')

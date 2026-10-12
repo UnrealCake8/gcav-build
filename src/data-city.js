@@ -1,6 +1,7 @@
+import {mappedBuildings,renderMappedBuildings} from './mapped-buildings.js';
 import {landmarks} from './city-life.js';
 import * as T from 'three';import {highwayRoads,highwayBounds,connector,nearestRoad,pointSegmentDistance} from './road-network.js';import {tollGates} from './salik.js';import {surface} from './waterfront.js';
-export function createDataCity(scene,{box,mat}){
+export function createDataCity(scene,{box,mat,addBlocker}){
  const existing=new Set(scene.children),nightMaterials=[],lamps=[];
  const sand=mat('#a4aaa0'),roadmat=mat('#464b4f'),white=mat('#e3e0d4'),stone=mat('#a9aaa4'),glass=mat('#6e919e',.36,.2),green=mat('#6d8564'),metal=mat('#354249');
  sand.roughness=1;roadmat.map=surface('asphalt');roadmat.color.set('#ffffff');glass.map=surface('windows');glass.color.set('#ffffff');
@@ -16,8 +17,8 @@ export function createDataCity(scene,{box,mat}){
  const paving=mat('#bfc0b6'),grass=mat('#728767'),parking=mat('#717b7c');
  for(let k=0;k<highwayRoads.length;k+=3){const r=highwayRoads[k],v=r.points[Math.floor(r.points.length/2)];part(110,.05,95,v.x,.34,v.z,paving);if(k%12===0){part(36,.06,26,v.x+40,.39,v.z+38,grass);part(24,.07,30,v.x-40,.4,v.z+38,parking);for(let n=-2;n<=2;n++)part(9,.03,.15,v.x-40,.47,v.z+38+n*5,paint);}}
  for(const l of landmarks){part(l.w+80,.06,l.d+80,l.x,.36,l.z,paving);part(28,.08,20,l.x-l.w/2-20,.42,l.z,grass);}
- const buildings=[];
- function building(x,z,w,d,h,index){if(landmarks.some(l=>Math.abs(x-l.x)<l.w/2+w/2+30&&Math.abs(z-l.z)<l.d/2+d/2+30))return;if(buildings.some(b=>Math.abs(x-b.x)<(w+b.w)/2+22&&Math.abs(z-b.z)<(d+b.d)/2+22))return;if(landmarks.some(l=>pointSegmentDistance({x,z},l.entrance,nearestRoad(l.entrance).point)<Math.hypot(w,d)/2+6))return;if(nearestRoad({x,z}).distance<Math.hypot(w,d)/2+14)return;box(w,h,d,x,h/2+.4,z,index%3===0?white:glass,true);buildings.push({x,z,w,d});part(w+1,.5,d+1,x,h+.7,z,metal);for(let y=4;y<h;y+=5)part(w+.15,.12,d+.15,x,y,z,stone);}
+ const buildings=renderMappedBuildings(scene,stone,{addBlocker,exclude:b=>landmarks.some(l=>Math.hypot(l.x-b.x,l.z-b.z)<Math.max(l.w,l.d))});
+ function building(x,z,w,d,h,index){if(mappedBuildings.some(b=>Math.hypot(x-b.x,z-b.z)<100))return;if(landmarks.some(l=>Math.abs(x-l.x)<l.w/2+w/2+30&&Math.abs(z-l.z)<l.d/2+d/2+30))return;if(buildings.some(b=>Math.abs(x-b.x)<(w+b.w)/2+22&&Math.abs(z-b.z)<(d+b.d)/2+22))return;if(landmarks.some(l=>pointSegmentDistance({x,z},l.entrance,nearestRoad(l.entrance).point)<Math.hypot(w,d)/2+6))return;if(nearestRoad({x,z}).distance<Math.hypot(w,d)/2+14)return;box(w,h,d,x,h/2+.4,z,index%3===0?white:glass,true);buildings.push({x,z,w,d});part(w+1,.5,d+1,x,h+.7,z,metal);for(let y=4;y<h;y+=5)part(w+.15,.12,d+.15,x,y,z,stone);}
  // Buildings remain procedural; the drivable highway centre-lines come from OSM.
  for(let x=-150;x<=175;x+=64)for(let z=-170;z<=165;z+=64){if(Math.hypot(x-8,z-12)<30)continue;building(x,z,18,18,18+Math.abs(x*7+z*3)%70,Math.abs(x+z));}
  for(let k=0;k<highwayRoads.length;k+=5){const r=highwayRoads[k],p=r.points[Math.floor(r.points.length/2)],next=r.points.at(-1),yaw=Math.atan2(next.x-p.x,next.z-p.z);for(const side of [-1,1]){const x=p.x+Math.cos(yaw)*65*side,z=p.z-Math.sin(yaw)*65*side;building(x,z,14,14,8+k%40,k);}}
@@ -31,7 +32,7 @@ export function createDataCity(scene,{box,mat}){
  // Geographic anchors with deliberately simplified architecture and local access lanes.
  for(const l of landmarks){const {x,z,w,d,h}=l;part(w+30,.12,d+30,x,.42,z,stone);const e=l.entrance,access=nearestRoad(e).point;strip(e,access,7,.65,roadmat);
  part(14,.12,24,e.x+16,.48,e.z,roadmat);for(let n=-2;n<=2;n++)part(10,.04,.12,e.x+16,.51,e.z+n*4,white);
- if(l.kind==='tower'){for(let i=0;i<12;i++){const width=w*(1-i/14);box(width,14,width,x,7+i*14,z,glass,i===0);}part(.7,39,.7,x,188,z,white);}
+ if(l.kind==='tower'){for(let i=0;i<12;i++){const width=w*(1-i/14);box(width,58,width,x,29+i*58,z,glass,i===0);}part(.7,132,.7,x,762,z,white);}
  else if(l.kind==='frame'){const gold=mat('#c8a558',.35,.7);box(5,h,6,x-w/2,h/2,z,gold,true);box(5,h,6,x+w/2,h/2,z,gold,true);part(w+5,5,6,x,h,z,gold);}
  else if(l.kind==='museum'){box(15,3,8,x,1.5,z,stone,true);const ring=new T.Mesh(new T.TorusGeometry(10,3.8,12,40),mat('#bbc6ca',.25,.7));ring.scale.set(1.4,.8,1);ring.position.set(x,12,z);scene.add(ring);}
  else if(l.kind==='hotel'){box(w,4,d,x,2,z,white,true);for(let i=0;i<12;i++)part(w*(1-i/13),h/12,d,x,h/24+i*h/12,z,white);part(1,h+8,1,x-w/2,h/2,z,metal);}
