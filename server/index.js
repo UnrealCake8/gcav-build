@@ -5,8 +5,7 @@ import {insideWorld} from '../src/world-layout.js';
 import {validOutfit} from '../src/outfits.js';
 import http from 'node:http';
 import {randomUUID,randomBytes} from 'node:crypto';
-import {readFile} from 'node:fs/promises';
-import {resolve,extname} from 'node:path';
+import {resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {WebSocketServer,WebSocket} from 'ws';
 const MAX_CLIP=1024*1024, TTL=5*60*1000;
@@ -24,6 +23,10 @@ export function createGameServer({origins=[],maxPlayers=16,clipTTL=TTL,ringTimeo
  const server=http.createServer(async(req,res)=>{req.setTimeout(15000);try{const url=new URL(req.url,'http://local');const p=tokens.get((req.headers.authorization||'').replace(/^Bearer /,''));
  if(url.pathname==='/health'){json(res,200,{status:'ok'});return;}
  if(url.pathname.startsWith('/api/')){
+ const origin=req.headers.origin;
+ if(!origin||!origins.includes(origin)){json(res,403,{error:'Origin denied'});return;}
+ res.setHeader('Access-Control-Allow-Origin',origin);res.setHeader('Vary','Origin');res.setHeader('Access-Control-Allow-Methods','GET, POST, OPTIONS');res.setHeader('Access-Control-Allow-Headers','Authorization, Content-Type, X-Call-ID');res.setHeader('Access-Control-Max-Age','600');
+ if(req.method==='OPTIONS'){res.writeHead(204,{'Cache-Control':'no-store'});res.end();return;}
  if(!p||!p.joined){json(res,401,{error:'Session required'});return;}
  if(req.method==='POST'&&url.pathname==='/api/clips'){
  if(!origins.includes(req.headers.origin)){json(res,403,{error:'Origin denied'});return;}
@@ -38,9 +41,8 @@ export function createGameServer({origins=[],maxPlayers=16,clipTTL=TTL,ringTimeo
  send(playerById(recipient)?.ws,{type:'voice-clip',id,callId:c.id,from:p.number,name:p.name});json(res,201,{id});return;}
  if(req.method==='GET'&&url.pathname.startsWith('/api/clips/')){const id=url.pathname.slice('/api/clips/'.length),clip=clips.get(id);if(!clip||Date.now()>clip.expires){dropClip(id);json(res,404,{error:'Clip expired'});return;}if(clip.recipient!==p.id){json(res,403,{error:'Private recording'});return;}res.writeHead(200,{'Content-Type':clip.mime,'Cache-Control':'no-store','X-Content-Type-Options':'nosniff'});res.end(clip.data);return;}
  json(res,404,{error:'Not found'});return;}
- if(req.method!=='GET'&&req.method!=='HEAD'){json(res,405,{error:'Method not allowed'});return;}
- const path=url.pathname==='/'?'index.html':decodeURIComponent(url.pathname).slice(1);if(!['index.html','game.js','style.css'].includes(path)){json(res,404,{error:'Not found'});return;}
- const data=await readFile(resolve(fileURLToPath(new URL('../dist/',import.meta.url)),path));res.writeHead(200,{'Content-Type':types[extname(path)]||'application/octet-stream','X-Content-Type-Options':'nosniff','Referrer-Policy':'same-origin','Permissions-Policy':'microphone=(self)','Cache-Control':'no-cache'});res.end(req.method==='HEAD'?undefined:data);
+ if(req.method==='GET'&&url.pathname==='/'){json(res,200,{service:'gcav-multiplayer',websocket:'/multiplayer'});return;}
+ json(res,404,{error:'Not found'});return;
  }catch{if(!res.headersSent)json(res,500,{error:'Request failed'});else res.end();}});
  const wss=new WebSocketServer({noServer:true,maxPayload:2048});
  server.on('upgrade',(req,socket,head)=>{if(req.url!=='/multiplayer'||!origins.includes(req.headers.origin)){socket.write('HTTP/1.1 403 Forbidden\r\n\r\n');socket.destroy();return;}if(clients.size>=maxPlayers){socket.write('HTTP/1.1 503 Service Unavailable\r\n\r\n');socket.destroy();return;}wss.handleUpgrade(req,socket,head,ws=>wss.emit('connection',ws,req));});
@@ -81,4 +83,4 @@ export function createGameServer({origins=[],maxPlayers=16,clipTTL=TTL,ringTimeo
  const cleanup=setInterval(()=>{for(const[id,i]of invoices)if(clock()>i.expires||!playerById(i.customer)||!playerById(i.merchant))invoices.delete(id);for(const[id,c]of clips)if(Date.now()>c.expires)dropClip(id);},1000);
  return{server,wss,close:async()=>{clearInterval(tick);clearInterval(ping);clearInterval(cleanup);for(const c of calls.values())clearTimeout(c.timer);for(const ws of clients.keys())ws.terminate();await new Promise(r=>wss.close(r));await new Promise(r=>server.close(r));}};
 }
-if(process.argv[1]===fileURLToPath(import.meta.url)){const port=Number(process.env.PORT||3000),origins=(process.env.ALLOWED_ORIGINS||`http://localhost:${port},http://127.0.0.1:${port}`).split(',').map(s=>s.trim()).filter(Boolean);const game=createGameServer({origins,walletPath:resolve('data/wallets.json'),tollOptions:{ramadan:process.env.SALIK_RAMADAN==='true',specialDay:process.env.SALIK_SPECIAL_DAY==='true'}});game.server.listen(port,process.env.HOST||'127.0.0.1',()=>console.log(`Game ready at http://localhost:${port}. Website, multiplayer and private voice clips share this server.`));}
+if(process.argv[1]===fileURLToPath(import.meta.url)){const port=Number(process.env.PORT||3000),origins=(process.env.ALLOWED_ORIGINS||`http://localhost:${port},http://127.0.0.1:${port},https://gca.v.malouksgames.com`).split(',').map(s=>s.trim()).filter(Boolean);const game=createGameServer({origins,walletPath:resolve('data/wallets.json'),tollOptions:{ramadan:process.env.SALIK_RAMADAN==='true',specialDay:process.env.SALIK_SPECIAL_DAY==='true'}});game.server.listen(port,process.env.HOST||'0.0.0.0',()=>console.log(`Multiplayer server listening on port ${port}`));}
