@@ -1,0 +1,17 @@
+services:
+  multiplayer:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "${PORT:-3000}:3000"
+    environment:
+      HOST: 0.0.0.0
+      PORT: 3000
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-https://gca.v.malouksgames.com}
+      SALIK_RAMADAN: ${SALIK_RAMADAN:-false}
+      SALIK_SPECIAL_DAY: ${SALIK_SPECIAL_DAY:-false}
+    volumes:
+      - wallets:/app/data
+
+volumes:
+  wallets:
