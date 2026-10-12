@@ -13,5 +13,5 @@ COPY src/data/dubai-buildings.json src/data/dubai-roads.json src/data/dubai-land
 RUN mkdir -p /app/data && chown -R node:node /app
 USER node
 
-EXPOSE 3001
+EXPOSE 3000
 CMD ["npm", "start"]

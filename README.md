@@ -22,11 +22,11 @@ Start the service:
 docker compose up -d --build
 ```
 
-It listens on port 3001. Docker keeps wallet data in a named volume, so it survives container restarts. Check that it is running at `http://localhost:3001/health`. Stop it with `docker compose down`; to also erase the server's saved wallets, run `docker compose down --volumes`.
+Docker maps Mac port 3001 to container port 3000. The active Cloudflare Tunnel on the Mac should use `http://127.0.0.1:3001` as its service URL; it does not need the container's `192.168...` address. If Mac port 3001 is occupied, change `HOST_PORT` in `.env` and use that same port for the tunnel. Docker keeps wallet data in a named volume, so it survives container restarts. Check it at `http://localhost:3001/health`. Stop it with `docker compose down`; to also erase the server's saved wallets, run `docker compose down --volumes`.
 
 ## Make it reachable to players
 
-For remote players, give the server a public hostname with HTTPS/WSS, then route that hostname to port 3001 using a reverse proxy or Cloudflare Tunnel. The proxy must pass WebSocket upgrades on `/multiplayer` and normal HTTPS requests to `/api/clips`. Do not expose the service over plain `ws://` to a game page loaded over HTTPS.
+For remote players, give the server a public hostname with HTTPS/WSS, then route that hostname to the published Mac port (3001 by default) using a reverse proxy or Cloudflare Tunnel. The proxy must pass WebSocket upgrades on `/multiplayer` and normal HTTPS requests to `/api/clips`. Do not expose the service over plain `ws://` to a game page loaded over HTTPS.
 
 The default domain for the Malouks Games server is:
 
@@ -55,7 +55,7 @@ npm ci
 npm start
 ```
 
-The process listens on `0.0.0.0:3001` by default and stores wallet data in `data/wallets.json`. Set `PORT` if needed. Keep the process running while players use the server.
+Without Docker, the process listens on `0.0.0.0:3001` by default and stores wallet data in `data/wallets.json`. Set `PORT` in `.env` if needed. Keep the process running while players use the server.
 
 ## CORS and game origin
 
