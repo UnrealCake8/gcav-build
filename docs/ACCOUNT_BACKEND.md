@@ -33,8 +33,12 @@ Git. `/api/config` returns only these two public values.
 - `POST /api/transfer` requires a Supabase access token and accepts
   `{ "recipientId": "<uuid>", "amount": 25, "requestId": "<uuid>" }`.
   The database performs the transfer atomically and makes retries idempotent.
+- The in-game phone's **Account** app supports email signup/sign-in and shows
+  the signed-in cloud wallet and recent ledger entries.
 
 The current real-time game process still uses its existing multiplayer
 connection and wallet store. These routes establish the account and cloud-bank
-boundary; wiring the live game actions to this wallet is a separate migration
-step so the local session balance and cloud balance are never silently mixed.
+boundary; gameplay cash, Salik, jobs, property purchases, and the in-game hPay
+screen still use the existing multiplayer wallet. The Account app labels the
+cloud wallet separately so the two balances are never silently mixed. Wiring
+game actions to cloud money is a separate migration step.
