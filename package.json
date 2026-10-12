@@ -13,6 +13,7 @@
   "author": "",
   "type": "module",
   "dependencies": {
+    "@supabase/supabase-js": "^2.117.3",
     "esbuild": "^0.28.2",
     "three": "^0.186.1",
     "ws": "^8.22.0"
