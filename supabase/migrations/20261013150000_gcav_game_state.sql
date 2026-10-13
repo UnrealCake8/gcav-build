@@ -396,6 +396,75 @@ begin
     perform public.gca_emit_user(v_other,'notice',jsonb_build_object('text','You received AED '||to_char(v_amount,'FM999999990.00')||' from '||p.name));
     perform public.gca_emit_user(u,'notice',jsonb_build_object('text','Transfer sent'));
     perform public.gca_emit_user(v_other,'bank',public.gca_game_wallet_event(v_other));
+  elsif p_action='property-renew-request' then
+    v_id:=p_payload->>'id';
+    select owner_id into v_other from public.gca_game_properties where property_id=v_id and owner_id is not null and owner_id<>u;
+    if v_other is null then raise exception 'Rental unavailable' using errcode='22023'; end if;
+    insert into public.gca_rental_requests(property_id,owner_id,tenant_id,expires_at)
+      values(v_id,v_other,u,v_now+interval '24 hours')
+      on conflict(property_id,tenant_id) do update set requested_at=v_now,expires_at=v_now+interval '24 hours'
+      returning id into v_uuid;
+    perform public.gca_emit_user(v_other,'notice',jsonb_build_object('text',p.name||' requested to renew a rental'));
+    v_event:=jsonb_build_object('type','notice','text','Renewal request sent to landlord');
+  elsif p_action='property-renew-answer' then
+    v_uuid:=(p_payload->>'requestId')::uuid;
+    select * into v_call from public.gca_game_calls where false; -- keeps the composite variable unused for this branch
+    select property_id,tenant_id into v_id,v_other from public.gca_rental_requests
+      where id=v_uuid and owner_id=u and expires_at>v_now for update;
+    if not found then raise exception 'Renewal request expired' using errcode='22023'; end if;
+    if coalesce((p_payload->>'accept')::boolean,false) then
+      select rent_price into v_amount from public.gca_game_properties where property_id=v_id for update;
+      select balance into v_balance from public.gca_wallets where user_id=v_other for update;
+      if v_balance<v_amount then raise exception 'Tenant has insufficient funds' using errcode='22023'; end if;
+      update public.gca_wallets set balance=balance-v_amount,updated_at=v_now where user_id=v_other;
+      update public.gca_wallets set balance=balance+v_amount,updated_at=v_now where user_id=u;
+      insert into public.gca_ledger(user_id,amount,label,kind) values(v_other,-v_amount,'Rental renewal','rent');
+      insert into public.gca_ledger(user_id,amount,label,kind) values(u,v_amount,'Rental income','rent');
+      update public.gca_game_properties set tenant_expires_at=greatest(tenant_expires_at,v_now)+interval '30 days' where property_id=v_id;
+      perform public.gca_emit_user(v_other,'bank',public.gca_game_wallet_event(v_other));
+      perform public.gca_emit_user(v_other,'notice',jsonb_build_object('text','Landlord accepted your renewal'));
+    else
+      perform public.gca_emit_user(v_other,'notice',jsonb_build_object('text','Landlord declined your renewal'));
+    end if;
+    delete from public.gca_rental_requests where id=v_uuid;
+    v_event:=jsonb_build_object('type','notice','text',case when coalesce((p_payload->>'accept')::boolean,false) then 'Renewal accepted' else 'Renewal declined' end);
+  elsif p_action='pos-create' then
+    if p.role<>'retail' or p.space is null or p.space='custody' then raise exception 'POS unavailable' using errcode='22023'; end if;
+    select user_id into v_other from public.gca_game_players
+      where player_number::text=p_payload->>'number' and user_id<>u and space=p.space and last_seen_at>v_now-interval '60 seconds'
+        and sqrt(power(x-p.x,2)+power(z-p.z,2))<=8;
+    if v_other is null then raise exception 'POS requires a nearby customer in this shop' using errcode='22023'; end if;
+    v_item:=p_payload->>'item';v_amount:=case v_item when 'coffee' then 12 when 'meal' then 30 when 'souvenir' then 45 else null end;
+    if v_amount is null then raise exception 'Item unavailable' using errcode='22023'; end if;
+    if exists(select 1 from public.gca_game_invoices where state='pending' and expires_at>v_now and (merchant_id in (u,v_other) or customer_id in (u,v_other)))
+      then raise exception 'Invoice already pending' using errcode='22023'; end if;
+    insert into public.gca_game_invoices(merchant_id,customer_id,item_id,item_name,amount,space,expires_at)
+      values(u,v_other,v_item,case v_item when 'coffee' then 'Coffee' when 'meal' then 'Lunch' else 'City souvenir' end,v_amount,p.space,v_now+interval '30 seconds') returning id into v_uuid;
+    perform public.gca_emit_user(v_other,'invoice',jsonb_build_object('id',v_uuid,'merchant',p.name,'item',case v_item when 'coffee' then 'Coffee' when 'meal' then 'Lunch' else 'City souvenir' end,'amount',v_amount));
+    v_event:=jsonb_build_object('type','notice','text','Checkout sent. Waiting for customer approval.');
+  elsif p_action='pos-answer' then
+    v_uuid:=(p_payload->>'id')::uuid;
+    select * into v_call from public.gca_game_calls where false;
+    select merchant_id,customer_id,amount,item_id into v_other,v_uuid,v_amount,v_item
+      from public.gca_game_invoices where id=(p_payload->>'id')::uuid and customer_id=u and state='pending' and expires_at>v_now for update;
+    if not found then raise exception 'Invoice expired' using errcode='22023'; end if;
+    if coalesce((p_payload->>'accept')::boolean,false) then
+      select balance into v_balance from public.gca_wallets where user_id=u for update;
+      if v_balance<v_amount then raise exception 'Insufficient funds' using errcode='22023'; end if;
+      update public.gca_wallets set balance=balance-v_amount,updated_at=v_now where user_id=u;
+      update public.gca_wallets set balance=balance+v_amount,updated_at=v_now where user_id=v_other;
+      update public.gca_game_players set inventory=inventory||jsonb_build_object(v_item,coalesce((inventory->>v_item)::integer,0)+1) where user_id=u;
+      insert into public.gca_ledger(user_id,amount,label,kind) values(u,-v_amount,'Shop checkout','shop');
+      insert into public.gca_ledger(user_id,amount,label,kind) values(v_other,v_amount,'Shop sale','shop');
+      update public.gca_game_invoices set state='paid' where id=(p_payload->>'id')::uuid;
+      perform public.gca_emit_user(v_other,'bank',public.gca_game_wallet_event(v_other));
+      perform public.gca_emit_user(v_other,'notice',jsonb_build_object('text','Customer paid the invoice'));
+      v_event:=public.gca_game_wallet_event(u);
+    else
+      update public.gca_game_invoices set state='declined' where id=(p_payload->>'id')::uuid;
+      perform public.gca_emit_user(v_other,'notice',jsonb_build_object('text','Checkout declined'));
+      v_event:=jsonb_build_object('type','notice','text','Checkout declined');
+    end if;
   elsif p_action='purchase' then
     if p.space is null or p.space='custody' then raise exception 'Shop purchase unavailable' using errcode='22023'; end if;
     v_item:=p_payload->>'item';
