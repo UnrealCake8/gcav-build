@@ -1,46 +1,28 @@
-# Supabase Realtime migration plan
+# GCAV multiplayer and wallet architecture
 
-## Target
+## Current transport map
 
-Keep guest play by creating a Supabase anonymous Auth session before a player joins the online world. Use that user ID as the durable player identity. When a guest adds an email identity, link it to the same Supabase user so the wallet keeps the same owner.
+| Feature | Path | Authority / persistence |
+| --- | --- | --- |
+| Join, player identity and initial snapshot | Authenticated `/api/game` action; private Realtime user/world channels | Supabase Auth user ID and Postgres game tables |
+| Live movement and room chat | Authenticated per-player Supabase Realtime Broadcast channels | Receivers use the player identity and name from Postgres snapshots; live coordinates are display state only |
+| Movement checkpoints, outfit, interior transitions and reset | Authenticated `/api/game`; Postgres publishes world snapshots over private Realtime Broadcast | Movement checkpoints, transitions and all proximity/economy checks are validated in Postgres |
+| Calls | Authenticated `/api/game`; private per-user Realtime Broadcast; call-topic RLS checks database participant rows | Call participant/state rows in Postgres |
+| Voice clips | Binary Broadcast in the active private call topic; receiver sends `voice-received` | Bytes are transient; sender drops its pending in-memory copy after acknowledgement or timeout |
+| Wallet, transfer, toll, job, shop, POS and property | Authenticated `/api/game` and dedicated account routes; Postgres RPCs | Atomic wallet/ledger/state changes in Postgres |
 
-Use Supabase Realtime for ephemeral online state:
-- Presence identifies online sessions.
-- Private, per-player channels publish movement and room chat. A user can publish only to their own topic; other authenticated players can subscribe.
-- A private call channel carries voice clips. During this first slice, the existing game server issues an unguessable random call UUID only to the two call participants; the UUID is the short-lived channel capability. The later call-signaling migration should move membership checks to a database call row.
+The app no longer has a `/multiplayer` Node WebSocket endpoint, a JSON wallet store, or `/api/clips` upload/download routes. Vercel handles only bounded request/response API calls. Supabase Realtime supplies the managed persistent WebSocket transport for every former live WebSocket feature: movement, chat, world/player events, call signaling and voice clips.
 
-Use Vercel API routes and database RPCs for state changes that need validation: transfers, purchases, jobs, Salik, property and inventory. Realtime messages are notifications and live snapshots; they do not grant money or change authoritative game state.
+## Security and retries
 
-## Voice clips
+All game actions require a valid Supabase access token. Sensitive tables have RLS enabled and no direct client write grants. `gca_game_action` checks `auth.uid()`, reads the caller’s state from Postgres, validates the action, then commits game state and ledger changes together. Private call topics are authorized against the stored caller/callee IDs and call state. Clients cannot publish authoritative world state or economic events.
 
-Send the recorded bytes in an ephemeral binary Broadcast on the private call channel. After the recipient has received the full bytes and accepted them into its playback queue, it sends a `voice-received` acknowledgement with the clip ID. The sender then removes that clip from its pending in-memory queue. Clear pending clips on call end, disconnect, or timeout. The voice path uses anonymous Supabase Auth for guests; creating an email account upgrades that same user identity.
+Economy, role, job, chat and call actions carry a UUID request key. The database stores the request, exact payload and response in the same transaction as the action. An identical retry returns the stored response; the same key with a changed action or payload fails. Transfers additionally use the ledger's unique request ID so a retry cannot debit twice.
 
-Do not upload clips to Storage or use Broadcast Replay. Client Broadcast is transient; no clip row or stored object remains to delete. The acknowledgement is application-level: Realtime's `ack` option confirms receipt by the Realtime server, not by the other player.
+## Voice delivery
 
-## Existing WebSocket messages to migrate
+Voice clips use a short-lived private call topic and no Storage or replay. The receiver acknowledges after the clip has been accepted into its playback queue. The sender removes its pending byte buffer when that acknowledgement arrives. Pending bytes also clear when the call/channel ends or the timeout expires. Realtime's server acknowledgement only confirms that Realtime accepted a broadcast; `voice-received` is the recipient-level acknowledgement.
 
-| Current message group | Destination |
-| --- | --- |
-| `state`, `move`, `outfit`, `enter`, `exit`, `reset` | Presence and per-player Broadcast for live state; validated movement or room transitions through game APIs where needed |
-| `chat` | Per-player Broadcast, with the sender identity taken from the publishing topic |
-| `dial`, `answer`, `hangup` | Authenticated call API plus a participant-only private call channel |
-| `voice-clip` | Binary Broadcast and recipient acknowledgement; no HTTP clip endpoint |
-| `wallet`, `bank`, `transfer`, `purchase`, `pos-*`, `property-*`, `shift`, `job-*`, `salik`, `arrest`, `bail`, `rob` | Vercel API + server-side Postgres validation and ledger/state writes |
+## Local checks
 
-## Current implementation on `plan/supabase-realtime-migration`
-
-- Supabase guest sessions use anonymous Auth; email account creation upgrades the same identity.
-- Voice media uses private Realtime Broadcast channels with application-level receiver acknowledgement.
-- Realtime never stores or replays voice messages. Existing Node HTTP clip routes remain only as legacy code while clients migrate.
-- Call setup/signaling, movement, room chat, world snapshots, and game actions still use the persistent WebSocket server. Economy actions remain server-validated there until their API/database replacements are ready.
-- The Realtime policy currently uses the random call UUID as a short-lived capability. Replace this with participant-row authorization when call signaling moves to the API/database.
-
-## Rollout order
-
-1. Add anonymous Supabase sessions and private-channel RLS without changing the live connection.
-2. Move presence, movement snapshots and room chat to Realtime.
-3. Move call signaling and voice clips to Realtime; verify recipient acknowledgement clears pending audio.
-4. Move every remaining state/economy action behind authenticated APIs and Postgres transactions.
-5. Remove the player-facing WebSocket endpoint and local JSON wallet only after all actions have a tested replacement.
-
-Keep the old path during the transition. Do not expose a client Broadcast as the authority for money, property ownership, or jobs.
+Run `npm test` and `npm run build` from the cloned repository. The local server in `server/index.js` serves static files and runs the same API handlers for local work; it does not create a persistent WebSocket server. Production validation belongs on the `gcav-build` production deployment after review. Do not depend on Vercel previews.
