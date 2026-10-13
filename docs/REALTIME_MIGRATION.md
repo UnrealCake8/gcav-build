@@ -7,13 +7,13 @@ Keep guest play by creating a Supabase anonymous Auth session before a player jo
 Use Supabase Realtime for ephemeral online state:
 - Presence identifies online sessions.
 - Private, per-player channels publish movement and room chat. A user can publish only to their own topic; other authenticated players can subscribe.
-- A private call channel carries call signaling and voice clips. A database call row identifies the two permitted participants.
+- A private call channel carries voice clips. During this first slice, the existing game server issues an unguessable random call UUID only to the two call participants; the UUID is the short-lived channel capability. The later call-signaling migration should move membership checks to a database call row.
 
 Use Vercel API routes and database RPCs for state changes that need validation: transfers, purchases, jobs, Salik, property and inventory. Realtime messages are notifications and live snapshots; they do not grant money or change authoritative game state.
 
 ## Voice clips
 
-Send the recorded `ArrayBuffer` as a binary Broadcast on the private call channel. After the recipient has received the full bytes and accepted them into its playback queue, it sends a `voice-received` acknowledgement with the clip ID. The sender then removes that clip from its pending in-memory queue. Clear pending clips on call end, disconnect, or timeout.
+Send the recorded bytes in an ephemeral binary Broadcast on the private call channel. After the recipient has received the full bytes and accepted them into its playback queue, it sends a `voice-received` acknowledgement with the clip ID. The sender then removes that clip from its pending in-memory queue. Clear pending clips on call end, disconnect, or timeout. The voice path uses anonymous Supabase Auth for guests; creating an email account upgrades that same user identity.
 
 Do not upload clips to Storage or use Broadcast Replay. Client Broadcast is transient; no clip row or stored object remains to delete. The acknowledgement is application-level: Realtime's `ack` option confirms receipt by the Realtime server, not by the other player.
 
@@ -26,6 +26,14 @@ Do not upload clips to Storage or use Broadcast Replay. Client Broadcast is tran
 | `dial`, `answer`, `hangup` | Authenticated call API plus a participant-only private call channel |
 | `voice-clip` | Binary Broadcast and recipient acknowledgement; no HTTP clip endpoint |
 | `wallet`, `bank`, `transfer`, `purchase`, `pos-*`, `property-*`, `shift`, `job-*`, `salik`, `arrest`, `bail`, `rob` | Vercel API + server-side Postgres validation and ledger/state writes |
+
+## Current implementation on `plan/supabase-realtime-migration`
+
+- Supabase guest sessions use anonymous Auth; email account creation upgrades the same identity.
+- Voice media uses private Realtime Broadcast channels with application-level receiver acknowledgement.
+- Realtime never stores or replays voice messages. Existing Node HTTP clip routes remain only as legacy code while clients migrate.
+- Call setup/signaling, movement, room chat, world snapshots, and game actions still use the persistent WebSocket server. Economy actions remain server-validated there until their API/database replacements are ready.
+- The Realtime policy currently uses the random call UUID as a short-lived capability. Replace this with participant-row authorization when call signaling moves to the API/database.
 
 ## Rollout order
 
