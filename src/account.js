@@ -1,26 +1,15 @@
-import {createClient} from '@supabase/supabase-js';
-
-let clientPromise;
-function getClient(){
-  clientPromise ||= fetch('/api/config',{headers:{Accept:'application/json'}})
-    .then(async response=>{
-      if(!response.ok)throw new Error('Account service is not configured on this deployment.');
-      const config=await response.json();
-      return createClient(config.url,config.key);
-    });
-  return clientPromise;
-}
+import {getSupabase} from './supabase-client.js';
 
 export async function renderAccount(container,escapeHtml){
   container.querySelector('#accountContent')?.remove();
   const root=document.createElement('div');root.id='accountContent';container.append(root);
   root.insertAdjacentHTML('beforeend','<div class="card"><p>Loading your online account…</p></div>');
   try{
-    const supabase=await getClient();
+    const supabase=await getSupabase();
     const{data:{session}}=await supabase.auth.getSession();
     root.innerHTML='';
-    if(!session){
-      root.insertAdjacentHTML('beforeend',`<div class="card"><b>Save your account and online wallet</b><p>Sign in to see your cloud balance. New accounts start with AED 500.</p><label>Email<input id="accountEmail" type="email" autocomplete="email" maxlength="254"></label><label>Password<input id="accountPassword" type="password" autocomplete="current-password" minlength="8"></label><label>Player name<input id="accountName" maxlength="20" autocomplete="nickname"></label><button id="accountSignIn">Sign in</button> <button id="accountSignUp">Create account</button><p id="accountStatus" role="status"></p></div>`);
+    if(!session||session.user?.is_anonymous){
+      root.insertAdjacentHTML('beforeend',`<div class="card"><b>Save your account and online wallet</b><p>Create an account to keep your guest identity and wallet across devices. New accounts start with AED 500.</p><label>Email<input id="accountEmail" type="email" autocomplete="email" maxlength="254"></label><label>Password<input id="accountPassword" type="password" autocomplete="current-password" minlength="8"></label><label>Player name<input id="accountName" maxlength="20" autocomplete="nickname"></label><button id="accountSignIn">Sign in</button> <button id="accountSignUp">Create account</button><p id="accountStatus" role="status"></p></div>`);
       const status=root.querySelector('#accountStatus');
       async function submit(mode){
         const email=root.querySelector('#accountEmail').value.trim();
@@ -31,7 +20,9 @@ export async function renderAccount(container,escapeHtml){
         const buttons=root.querySelectorAll('#accountSignIn,#accountSignUp');buttons.forEach(button=>button.disabled=true);
         try{
           const result=mode==='signup'
-            ?await supabase.auth.signUp({email,password,options:{data:{display_name:displayName||'Player'}}})
+            ?((await supabase.auth.getSession()).data.session?.user?.is_anonymous
+              ?await supabase.auth.updateUser({email,password,data:{display_name:displayName||'Player'}})
+              :await supabase.auth.signUp({email,password,options:{data:{display_name:displayName||'Player'}}}))
             :await supabase.auth.signInWithPassword({email,password});
           if(result.error)throw result.error;
           if(result.data.session){await renderAccount(container,escapeHtml);return;}
