@@ -415,6 +415,7 @@ declare
   v_dt double precision;
   v_x double precision;
   v_z double precision;
+  v_tolls jsonb:='[]'::jsonb;
 begin
   if u is null then raise exception 'Sign in required' using errcode='28000'; end if;
   if p_action not in ('join','role','enter','exit','property-acquire','property-set-price',
@@ -477,6 +478,10 @@ begin
     if (p.space is null and (abs((p_payload->>'x')::double precision)>10320 or abs((p_payload->>'z')::double precision)>13135))
        or (p.space is not null and (abs((p_payload->>'x')::double precision)>21 or abs((p_payload->>'z')::double precision)>13))
        or v_distance>35*v_dt+3 then raise exception 'Invalid movement' using errcode='22023'; end if;
+    if p.space is null then
+      v_tolls:=public.gca_apply_tolls(u,p.x,p.z,(p_payload->>'x')::double precision,(p_payload->>'z')::double precision,
+        p.vehicle,coalesce((p_payload->>'vehicle')::boolean,false),v_now);
+    end if;
     update public.gca_game_players set x=(p_payload->>'x')::double precision,z=(p_payload->>'z')::double precision,
       yaw=((p_payload->>'yaw')::double precision-floor((p_payload->>'yaw')::double precision/6.283185307179586)*6.283185307179586),
       vehicle=(p.space is null and coalesce((p_payload->>'vehicle')::boolean,false)),
@@ -503,7 +508,7 @@ begin
       update public.gca_game_players set shift_started_at=null,shift_space=null,shift_role=null,shift_distance=0 where user_id=u;
     end if;
     perform public.gca_emit_world('state',jsonb_build_object('players',public.gca_game_world_state()));
-    return jsonb_build_object('events','[]'::jsonb);
+    return jsonb_build_object('events',v_tolls);
   elsif p_action='chat' then
     v_name:=left(regexp_replace(trim(coalesce(p_payload->>'text','')),'[[:cntrl:]]','','g'),240);
     if v_name='' or (p.last_chat_at is not null and v_now-p.last_chat_at<interval '800 milliseconds') then
