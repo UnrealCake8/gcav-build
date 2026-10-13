@@ -308,6 +308,8 @@ declare
   v_request uuid;
   v_distance double precision;
   v_dt double precision;
+  v_x double precision;
+  v_z double precision;
 begin
   if u is null then raise exception 'Sign in required' using errcode='28000'; end if;
   if p_action not in ('join','role','enter','exit','property-acquire','property-set-price',
@@ -374,17 +376,29 @@ begin
     if p.space is not null or p.vehicle then raise exception 'Cannot enter from here' using errcode='22023'; end if;
     select property_id into v_item from public.gca_game_properties where property_id=v_id
       and (owner_id=u or (tenant_id=u and tenant_expires_at>v_now));
-    if v_item is null then raise exception 'Property access required' using errcode='22023'; end if;
-    if sqrt(power(p.x-case v_id when 'apt-marina-01' then 39 when 'apt-downtown-02' then 112 when 'villa-jumeirah-01' then -97 else 112 end,2)
-       +power(p.z-case v_id when 'apt-marina-01' then 105 when 'apt-downtown-02' then -105 when 'villa-jumeirah-01' then 105 else 105 end,2))>8
-    then raise exception 'Too far from property' using errcode='22023'; end if;
-    v_space:='property:'||v_id;
+    if v_item is not null then
+      v_x:=case v_id when 'apt-marina-01' then 39 when 'apt-downtown-02' then 112 when 'villa-jumeirah-01' then -97 else 112 end;
+      v_z:=case v_id when 'apt-marina-01' then 105 when 'apt-downtown-02' then -105 when 'villa-jumeirah-01' then 105 else 105 end;
+      v_space:='property:'||v_id;
+    else
+      v_x:=case v_id when 'burj-khalifa' then -7.7408 when 'dubai-mall' then 550.81 when 'mall-emirates' then -7434.24 when 'museum-future' then 771.12 when 'dubai-frame' then 2641.35 when 'burj-arab' then -8934.05 else null end;
+      v_z:=case v_id when 'burj-khalifa' then .8817 when 'dubai-mall' then -146.72 when 'mall-emirates' then 8868.43 when 'museum-future' then -2436.06 when 'dubai-frame' then -4261.61 when 'burj-arab' then 6236.65 else null end;
+      v_space:=v_id;
+      if v_x is null then raise exception 'Property access required' using errcode='22023'; end if;
+    end if;
+    if sqrt(power(p.x-v_x,2)+power(p.z-v_z,2))>8 then raise exception 'Too far from entrance' using errcode='22023'; end if;
     update public.gca_game_players set space=v_space,x=0,z=9,shift_started_at=null where user_id=u;
     v_event:=jsonb_build_object('type','transition','space',v_space,'x',0,'z',9);
   elsif p_action='exit' then
     if p.space is null or p.space='custody' then raise exception 'Cannot exit here' using errcode='22023'; end if;
-    update public.gca_game_players set space=null,shift_started_at=null,x=8,z=12 where user_id=u;
-    v_event:=jsonb_build_object('type','transition','space',null,'x',8,'z',12);
+    v_id:=replace(p.space,'property:','');
+    v_x:=case v_id when 'apt-marina-01' then 39 when 'apt-downtown-02' then 112 when 'villa-jumeirah-01' then -97 when 'villa-waterfront-02' then 112
+      when 'burj-khalifa' then -7.7408 when 'dubai-mall' then 550.81 when 'mall-emirates' then -7434.24 when 'museum-future' then 771.12 when 'dubai-frame' then 2641.35 when 'burj-arab' then -8934.05 else null end;
+    v_z:=case v_id when 'apt-marina-01' then 105 when 'apt-downtown-02' then -105 when 'villa-jumeirah-01' then 105 when 'villa-waterfront-02' then 105
+      when 'burj-khalifa' then .8817 when 'dubai-mall' then -146.72 when 'mall-emirates' then 8868.43 when 'museum-future' then -2436.06 when 'dubai-frame' then -4261.61 when 'burj-arab' then 6236.65 else null end;
+    if v_x is null then raise exception 'Cannot exit here' using errcode='22023'; end if;
+    update public.gca_game_players set space=null,shift_started_at=null,x=v_x,z=v_z where user_id=u;
+    v_event:=jsonb_build_object('type','transition','space',null,'x',v_x,'z',v_z);
   elsif p_action='transfer' then
     v_id:=p_payload->>'number';
     select user_id into v_other from public.gca_game_players where player_number::text=v_id and user_id<>u;
@@ -398,7 +412,7 @@ begin
     perform public.gca_emit_user(v_other,'bank',public.gca_game_wallet_event(v_other));
   elsif p_action='property-renew-request' then
     v_id:=p_payload->>'id';
-    select owner_id into v_other from public.gca_game_properties where property_id=v_id and owner_id is not null and owner_id<>u;
+    select owner_id into v_other from public.gca_game_properties where property_id=v_id and owner_id is not null and owner_id<>u and tenant_id=u and tenant_expires_at>v_now;
     if v_other is null then raise exception 'Rental unavailable' using errcode='22023'; end if;
     insert into public.gca_rental_requests(property_id,owner_id,tenant_id,expires_at)
       values(v_id,v_other,u,v_now+interval '24 hours')
@@ -408,7 +422,6 @@ begin
     v_event:=jsonb_build_object('type','notice','text','Renewal request sent to landlord');
   elsif p_action='property-renew-answer' then
     v_uuid:=(p_payload->>'requestId')::uuid;
-    select * into v_call from public.gca_game_calls where false; -- keeps the composite variable unused for this branch
     select property_id,tenant_id into v_id,v_other from public.gca_rental_requests
       where id=v_uuid and owner_id=u and expires_at>v_now for update;
     if not found then raise exception 'Renewal request expired' using errcode='22023'; end if;
@@ -444,7 +457,6 @@ begin
     v_event:=jsonb_build_object('type','notice','text','Checkout sent. Waiting for customer approval.');
   elsif p_action='pos-answer' then
     v_uuid:=(p_payload->>'id')::uuid;
-    select * into v_call from public.gca_game_calls where false;
     select merchant_id,customer_id,amount,item_id into v_other,v_uuid,v_amount,v_item
       from public.gca_game_invoices where id=(p_payload->>'id')::uuid and customer_id=u and state='pending' and expires_at>v_now for update;
     if not found then raise exception 'Invoice expired' using errcode='22023'; end if;
@@ -546,7 +558,17 @@ begin
     update public.gca_game_players set space=null,x=8,z=12,yaw=0,vehicle=false,shift_started_at=null where user_id=u;
     v_event:=jsonb_build_object('type','transition','space',null,'x',8,'z',12);
   elsif p_action='arrest' then
-    raise exception 'Arrest unavailable' using errcode='22023';
+    if p.role<>'police' or p.jailed_until>v_now then raise exception 'Arrest unavailable' using errcode='22023'; end if;
+    v_other:=(p_payload->>'id')::uuid;
+    select player_number into v_id from public.gca_game_players s where s.user_id=v_other and s.user_id<>u
+      and s.wanted and s.jailed_until is null and s.space is not distinct from p.space
+      and not s.vehicle and not p.vehicle and sqrt(power(s.x-p.x,2)+power(s.z-p.z,2))<8 for update;
+    if not found then raise exception 'Suspect is not close enough' using errcode='22023'; end if;
+    update public.gca_game_players set jailed_until=v_now+interval '120 seconds',space='custody',x=0,z=9,vehicle=false,shift_started_at=null where user_id=v_other;
+    perform public.gca_emit_user(v_other,'transition',jsonb_build_object('space','custody','x',0,'z',9));
+    perform public.gca_emit_user(v_other,'bank',public.gca_game_wallet_event(v_other));
+    v_event:=jsonb_build_object('type','notice','text','Suspect arrested');
+
   elsif p_action in ('pos-create','pos-answer','property-renew-request','property-renew-answer') then
     raise exception 'Action validation is still required' using errcode='22023';
   else
