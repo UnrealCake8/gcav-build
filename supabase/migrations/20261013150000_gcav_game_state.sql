@@ -225,3 +225,17 @@ with check (
       and c.state='active'
   )
 );
+
+
+-- Keep privileged helper functions private even though they live in public.
+revoke all on function public.gca_game_snapshot() from public, anon;
+grant execute on function public.gca_game_snapshot() to authenticated;
+revoke all on function public.gca_emit_user(uuid,text,jsonb) from public, anon, authenticated;
+revoke all on function public.gca_emit_world(text,jsonb) from public, anon, authenticated;
+revoke all on function public.gca_create_player_account() from public, anon, authenticated;
+
+-- Realtime authorization policies need a participant-scoped read on the call table.
+grant select on public.gca_game_calls to authenticated;
+create policy "gcav call participant lookup"
+on public.gca_game_calls for select to authenticated
+using (auth.uid() in (caller_id,callee_id));
