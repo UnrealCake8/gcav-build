@@ -322,6 +322,16 @@ begin
     on conflict(user_id) do nothing;
     select * into p from public.gca_game_players where user_id=u for update;
   end if;
+  if p.jailed_until is not null and p.jailed_until<=v_now then
+    update public.gca_game_players set jailed_until=null,wanted=false,space=null where user_id=u;
+    select * into p from public.gca_game_players where user_id=u;
+  end if;
+  for v_call in select * from public.gca_game_calls where state='ringing' and expires_at<=v_now loop
+    update public.gca_game_calls set state='ended',ended_at=v_now where id=v_call.id;
+    update public.gca_game_players set call_id=null where call_id=v_call.id;
+    perform public.gca_emit_user(v_call.caller_id,'call-ended',jsonb_build_object('callId',v_call.id,'reason','No answer'));
+    perform public.gca_emit_user(v_call.callee_id,'call-ended',jsonb_build_object('callId',v_call.id,'reason','No answer'));
+  end loop;
   update public.gca_game_players set last_seen_at=v_now where user_id=u;
 
   if p_action='join' then
@@ -337,6 +347,10 @@ begin
       public.gca_game_wallet_event(u),
       jsonb_build_object('type','state','players',public.gca_game_world_state())
     );
+    if p.jailed_until>v_now then
+      update public.gca_game_players set space='custody',x=0,z=9,vehicle=false where user_id=u;
+      v_events:=v_events||jsonb_build_array(jsonb_build_object('type','transition','space','custody','x',0,'z',9));
+    end if;
     perform public.gca_emit_world('state',jsonb_build_object('players',public.gca_game_world_state()));
     return jsonb_build_object('events',v_events);
   elsif p_action='role' then
@@ -577,6 +591,7 @@ begin
       v_event:=jsonb_build_object('type','call-ended','callId',v_call.id,'reason','Call ended');
     end if;
   elsif p_action='reset' then
+    if p.space='custody' then raise exception 'Cannot reset from custody' using errcode='22023'; end if;
     update public.gca_game_players set space=null,x=8,z=12,yaw=0,vehicle=false,shift_started_at=null where user_id=u;
     v_event:=jsonb_build_object('type','transition','space',null,'x',8,'z',12);
   elsif p_action='arrest' then
