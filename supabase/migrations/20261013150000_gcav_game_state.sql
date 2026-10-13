@@ -199,14 +199,15 @@ drop policy if exists "gcav authenticated call topic read" on realtime.messages;
 drop policy if exists "gcav authenticated call topic publish" on realtime.messages;
 create policy "gcav authenticated world read"
 on realtime.messages for select to authenticated
-using (realtime.topic()='gcav:world');
+using (realtime.topic()='gcav:world' and realtime.messages.extension='broadcast');
 create policy "gcav authenticated own game read"
 on realtime.messages for select to authenticated
-using (realtime.topic()='gcav:user:'||auth.uid()::text);
+using (realtime.topic()='gcav:user:'||auth.uid()::text and realtime.messages.extension='broadcast');
 create policy "gcav call participant read"
 on realtime.messages for select to authenticated
 using (
-  realtime.topic() ~ '^gcav:call:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+  realtime.messages.extension='broadcast'
+  and realtime.topic() ~ '^gcav:call:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
   and exists (
     select 1 from public.gca_game_calls c
     where c.id::text=split_part(realtime.topic(),':',3)
@@ -217,7 +218,8 @@ using (
 create policy "gcav call participant publish"
 on realtime.messages for insert to authenticated
 with check (
-  realtime.topic() ~ '^gcav:call:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+  realtime.messages.extension='broadcast'
+  and realtime.topic() ~ '^gcav:call:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
   and exists (
     select 1 from public.gca_game_calls c
     where c.id::text=split_part(realtime.topic(),':',3)
