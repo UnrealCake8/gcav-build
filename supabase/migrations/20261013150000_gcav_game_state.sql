@@ -355,12 +355,34 @@ begin
     then raise exception 'Invalid position' using errcode='22023'; end if;
     v_distance:=sqrt(power((p_payload->>'x')::double precision-p.x,2)+power((p_payload->>'z')::double precision-p.z,2));
     v_dt:=greatest(.08,extract(epoch from (v_now-p.last_move_at)));
-    if abs((p_payload->>'x')::double precision)>10320 or abs((p_payload->>'z')::double precision)>13135
-      or v_distance>35*v_dt+3 then raise exception 'Invalid movement' using errcode='22023'; end if;
+    if (p.space is null and (abs((p_payload->>'x')::double precision)>10320 or abs((p_payload->>'z')::double precision)>13135))
+       or (p.space is not null and (abs((p_payload->>'x')::double precision)>21 or abs((p_payload->>'z')::double precision)>13))
+       or v_distance>35*v_dt+3 then raise exception 'Invalid movement' using errcode='22023'; end if;
     update public.gca_game_players set x=(p_payload->>'x')::double precision,z=(p_payload->>'z')::double precision,
-      yaw=mod((p_payload->>'yaw')::double precision,6.283185307179586),
+      yaw=((p_payload->>'yaw')::double precision-floor((p_payload->>'yaw')::double precision/6.283185307179586)*6.283185307179586),
       vehicle=(p.space is null and coalesce((p_payload->>'vehicle')::boolean,false)),
+      shift_distance=shift_distance+case when shift_started_at is not null then v_distance else 0 end,
       last_move_at=v_now,last_seen_at=v_now where user_id=u;
+    if p.space is null and p.job=1 and sqrt(power((p_payload->>'x')::double precision+105,2)+power((p_payload->>'z')::double precision,2))<8 then
+      update public.gca_game_players set job=2 where user_id=u;
+      perform public.gca_emit_user(u,'bank',public.gca_game_wallet_event(u));
+    elsif p.space is null and p.job=2 and sqrt(power((p_payload->>'x')::double precision-105,2)+power((p_payload->>'z')::double precision-105,2))<8 then
+      update public.gca_game_players set job=0 where user_id=u;
+      update public.gca_wallets set balance=balance+150,updated_at=v_now where user_id=u;
+      insert into public.gca_ledger(user_id,amount,label,kind) values(u,150,'Waterfront delivery','delivery');
+      perform public.gca_emit_user(u,'bank',public.gca_game_wallet_event(u));
+    end if;
+    if p.shift_started_at is not null and
+      ((p.shift_role='retail' and p.space=p.shift_space and v_now>=p.shift_started_at+interval '60 seconds')
+       or (p.shift_role='police' and p.space is null and p.shift_distance+v_distance>=80 and v_now<=p.shift_started_at+interval '120 seconds')) then
+      v_amount:=case p.shift_role when 'retail' then 25 else 60 end;
+      update public.gca_wallets set balance=balance+v_amount,updated_at=v_now where user_id=u;
+      insert into public.gca_ledger(user_id,amount,label,kind) values(u,v_amount,case p.shift_role when 'retail' then 'Retail shift' else 'Police patrol' end,'salary');
+      update public.gca_game_players set shift_started_at=null,shift_space=null,shift_role=null,shift_distance=0 where user_id=u;
+      perform public.gca_emit_user(u,'bank',public.gca_game_wallet_event(u));
+    elsif p.shift_started_at is not null and v_now>p.shift_started_at+case when p.shift_role='police' then interval '120 seconds' else interval '60 seconds' end then
+      update public.gca_game_players set shift_started_at=null,shift_space=null,shift_role=null,shift_distance=0 where user_id=u;
+    end if;
     perform public.gca_emit_world('state',jsonb_build_object('players',public.gca_game_world_state()));
     return jsonb_build_object('events','[]'::jsonb);
   elsif p_action='chat' then
