@@ -282,6 +282,111 @@ as $function$
   where p.last_seen_at>now()-interval '60 seconds';
 $function$;
 
+
+create or replace function public.gca_apply_tolls(
+  p_user uuid,p_ax double precision,p_az double precision,p_bx double precision,p_bz double precision,
+  p_was_vehicle boolean,p_is_vehicle boolean,p_now timestamptz
+) returns jsonb
+language plpgsql security definer set search_path=''
+as $function$
+declare
+  g record;
+  s public.gca_game_players%rowtype;
+  v_gates jsonb;
+  v_pairs jsonb;
+  v_last jsonb;
+  v_side_a double precision;
+  v_side_b double precision;
+  v_t double precision;
+  v_x double precision;
+  v_z double precision;
+  v_lateral double precision;
+  v_direction text;
+  v_key text;
+  v_pair text;
+  v_last_at double precision;
+  v_waived boolean;
+  v_hour double precision;
+  v_sunday boolean;
+  v_peak boolean;
+  v_free boolean;
+  v_base numeric;
+  v_vat numeric;
+  v_total numeric;
+  v_event jsonb;
+  v_result jsonb:='[]'::jsonb;
+begin
+  if not p_was_vehicle or not p_is_vehicle then return v_result; end if;
+  select * into s from public.gca_game_players where user_id=p_user for update;
+  v_gates:=coalesce(s.toll_state->'gates','{}'::jsonb);
+  v_pairs:=coalesce(s.toll_state->'pairs','{}'::jsonb);
+  for g in select * from (values
+    ('90100362','Al Barsha',-8311.482075,9064.631752,2.2515443678,22.0,'al-barsha',''),
+    ('1061530398','Al Safa North',-1257.954425,375.1484,-0.6962759616,22.0,'al-safa-north','safa'),
+    ('1151486380','Al Safa North',-1249.76345,411.594568,2.4480710202,25.5,'al-safa-north','safa'),
+    ('4444444077','Al Garhoud Bridge',6178.796,-3725.245876,2.4103171318,25.5,'al-garhoud-bridge',''),
+    ('4444444078','Al Garhoud Bridge',6161.08415,-3760.367336,-0.7097295437,15.0,'al-garhoud-bridge',''),
+    ('8672533187','Al Barsha',-8239.87905,8969.987488,-0.9138518451,22.0,'al-barsha',''),
+    ('12402919909','Al Safa South',-2834.88335,2308.632084,2.4495052957,22.0,'al-safa-south','safa'),
+    ('12402919910','Al Safa South',-2704.946075,2104.771768,-0.7002286779,22.0,'al-safa-south','safa'),
+    ('12402919912','Business Bay Crossing',6749.333175,-2969.639112,2.2474207131,25.5,'business-bay-crossing',''),
+    ('12402919913','Business Bay Crossing',6740.809725,-3012.797876,-0.8894780489,22.0,'business-bay-crossing','')
+  ) as t(id,name,gx,gz,yaw,width,logical_id,group_id) loop
+    v_last:=coalesce(v_gates->g.id,'{}'::jsonb);
+    if coalesce((v_last->>'armed')::boolean,true)=false and sqrt(power(p_bx-g.gx,2)+power(p_bz-g.gz,2))>20 then
+      v_last:=jsonb_set(v_last,'{armed}','true'::jsonb,true);
+    end if;
+    v_side_a:=(p_ax-g.gx)*sin(g.yaw)+(p_az-g.gz)*cos(g.yaw);
+    v_side_b:=(p_bx-g.gx)*sin(g.yaw)+(p_bz-g.gz)*cos(g.yaw);
+    if v_side_a=v_side_b or v_side_a*v_side_b>0 then continue; end if;
+    v_t:=-v_side_a/(v_side_b-v_side_a);
+    if v_t<0 or v_t>1 or coalesce((v_last->>'armed')::boolean,true)=false then continue; end if;
+    v_x:=p_ax+(p_bx-p_ax)*v_t;v_z:=p_az+(p_bz-p_az)*v_t;
+    v_lateral:=abs((v_x-g.gx)*cos(g.yaw)-(v_z-g.gz)*sin(g.yaw));
+    if v_lateral>g.width/2 then continue; end if;
+    v_last:=jsonb_set(v_last,'{armed}','false'::jsonb,true);
+    v_gates:=jsonb_set(v_gates,array[g.id],v_last,true);
+    v_direction:=case when p_bz<p_az then 'north' else 'south' end;
+    v_key:=g.logical_id||':'||v_direction;
+    v_last:=coalesce(v_pairs->v_key,'{}'::jsonb);
+    v_last_at:=coalesce((v_last->>'at')::double precision,0);
+    if v_last_at>0 and extract(epoch from p_now)*1000-v_last_at<20000 then continue; end if;
+    v_pair:=case when g.group_id<>'' then g.group_id||':'||v_direction else null end;
+    v_waived:=false;
+    if v_pair is not null then
+      v_last:=coalesce(v_pairs->v_pair,'{}'::jsonb);
+      v_last_at:=coalesce((v_last->>'at')::double precision,0);
+      v_waived:=v_last_at>0 and extract(epoch from p_now)*1000-v_last_at<3600000 and v_last->>'logicalId'<>g.logical_id;
+    end if;
+    v_hour:=extract(hour from p_now at time zone 'Asia/Dubai')+extract(minute from p_now at time zone 'Asia/Dubai')/60.0;
+    v_sunday:=extract(isodow from p_now at time zone 'Asia/Dubai')=7;
+    v_free:=v_hour>=1 and v_hour<6;
+    v_peak:=(v_hour>=6 and v_hour<10) or (v_hour>=16 and v_hour<20);
+    v_base:=case when v_free then 0 when v_peak and not v_sunday then 6 else 4 end;
+    v_vat:=case when p_now>='2026-06-01 00:00:00+04'::timestamptz then round(v_base*0.05,2) else 0 end;
+    v_total:=case when v_waived then 0 else v_base+v_vat end;
+    v_event:=jsonb_build_object('name',g.name,'total',v_total,'base',v_base,'vat',v_vat,
+      'reason',case when v_waived then 'Linked gate — charged once' when v_free then 'Free hours' when v_peak and not v_sunday then 'Peak' else 'Off-peak' end,
+      'direction',v_direction);
+    v_pairs:=jsonb_set(v_pairs,array[v_key],jsonb_build_object('at',extract(epoch from p_now)*1000,'logicalId',g.logical_id),true);
+    if v_pair is not null and not v_waived then
+      v_pairs:=jsonb_set(v_pairs,array[v_pair],jsonb_build_object('at',extract(epoch from p_now)*1000,'logicalId',g.logical_id),true);
+    end if;
+    if v_total>0 then
+      update public.gca_wallets set balance=balance-v_total,updated_at=p_now where user_id=p_user;
+      insert into public.gca_ledger(user_id,amount,label,kind,metadata)
+        values(p_user,-v_total,'Salik · '||g.name,'salik',v_event);
+    end if;
+    v_event:=public.gca_game_wallet_event(p_user)||jsonb_build_object('event',v_event);
+    perform public.gca_emit_user(p_user,'bank',v_event);
+    v_result:=v_result||jsonb_build_array(v_event);
+  end loop;
+  update public.gca_game_players set toll_state=jsonb_build_object('gates',v_gates,'pairs',v_pairs) where user_id=p_user;
+  return v_result;
+end;
+$function$;
+revoke all on function public.gca_apply_tolls(uuid,double precision,double precision,double precision,double precision,boolean,boolean,timestamptz) from public,anon,authenticated;
+
 create or replace function public.gca_game_action(p_action text,p_payload jsonb)
 returns jsonb
 language plpgsql
