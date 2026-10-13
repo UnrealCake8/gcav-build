@@ -239,3 +239,261 @@ grant select on public.gca_game_calls to authenticated;
 create policy "gcav call participant lookup"
 on public.gca_game_calls for select to authenticated
 using (auth.uid() in (caller_id,callee_id));
+
+
+create or replace function public.gca_game_wallet_event(p_user_id uuid)
+returns jsonb
+language sql
+security definer
+set search_path = ''
+as $function$
+  select jsonb_build_object(
+    'type','bank',
+    'balance',w.balance,
+    'entries',coalesce((select jsonb_agg(to_jsonb(x) order by x.created_at desc) from (
+      select id,amount,label,kind,metadata,created_at from public.gca_ledger
+      where user_id=p_user_id order by created_at desc limit 100
+    ) x),'[]'::jsonb),
+    'role',p.role,'inventory',p.inventory,'wanted',p.wanted,
+    'jailedUntil',extract(epoch from p.jailed_until)*1000,
+    'job',p.job,
+    'properties',coalesce((select jsonb_agg(jsonb_build_object(
+      'id',h.property_id,'mode',case when h.owner_id=p_user_id then 'buy' else 'rent' end,
+      'expiresAt',extract(epoch from h.tenant_expires_at)*1000
+    )) from public.gca_game_properties h
+      where h.owner_id=p_user_id or (h.tenant_id=p_user_id and h.tenant_expires_at>now())),'[]'::jsonb)
+  )
+  from public.gca_wallets w join public.gca_game_players p on p.user_id=w.user_id
+  where w.user_id=p_user_id;
+$function$;
+
+create or replace function public.gca_game_world_state()
+returns jsonb
+language sql
+security definer
+set search_path = ''
+as $function$
+  select coalesce(jsonb_agg(jsonb_build_object(
+    'id',p.user_id,'number',p.player_number::text,'name',p.name,'role',p.role,
+    'outfit',p.outfit,'x',p.x,'z',p.z,'yaw',p.yaw,'vehicle',p.vehicle,
+    'space',p.space,'wanted',p.wanted
+  ) order by p.player_number),'[]'::jsonb)
+  from public.gca_game_players p
+  where p.last_seen_at>now()-interval '60 seconds';
+$function$;
+
+create or replace function public.gca_game_action(p_action text,p_payload jsonb)
+returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $function$
+declare
+  u uuid:=auth.uid();
+  p public.gca_game_players%rowtype;
+  v_events jsonb:='[]'::jsonb;
+  v_event jsonb;
+  v_notice text;
+  v_now timestamptz:=now();
+  v_id text;
+  v_mode text;
+  v_amount numeric;
+  v_balance numeric;
+  v_other uuid;
+  v_item text;
+  v_name text;
+  v_space text;
+  v_call public.gca_game_calls%rowtype;
+  v_uuid uuid;
+  v_request uuid;
+  v_distance double precision;
+  v_dt double precision;
+begin
+  if u is null then raise exception 'Sign in required' using errcode='28000'; end if;
+  if p_action not in ('join','role','enter','exit','property-acquire','property-set-price',
+    'property-renew-request','property-renew-answer','purchase','shift','transfer','pos-create',
+    'pos-answer','rob','arrest','bail','outfit','move','job-start','reset','chat','dial','answer','hangup')
+  then raise exception 'Invalid game action' using errcode='22023'; end if;
+  select * into p from public.gca_game_players where user_id=u for update;
+  if not found then
+    insert into public.gca_game_players(user_id) values(u)
+    on conflict(user_id) do nothing;
+    select * into p from public.gca_game_players where user_id=u for update;
+  end if;
+  update public.gca_game_players set last_seen_at=v_now where user_id=u;
+
+  if p_action='join' then
+    v_name:=left(regexp_replace(coalesce(p_payload->>'name','Player'),'[[:cntrl:]]','','g'),20);
+    if v_name='' then v_name:='Player'; end if;
+    update public.gca_game_players set name=v_name,
+      outfit=case when p_payload->>'outfit' in ('street','sport','denim','formal','desert','night') then p_payload->>'outfit' else outfit end,
+      last_seen_at=v_now where user_id=u returning * into p;
+    update public.gca_profiles set display_name=v_name,updated_at=v_now where user_id=u;
+    v_events:=jsonb_build_array(
+      jsonb_build_object('type','welcome','id',u,'number',p.player_number::text,
+        'world',jsonb_build_object('epoch',extract(epoch from v_now)*1000,'now',extract(epoch from v_now)*1000,'cycleMs',1440000)),
+      public.gca_game_wallet_event(u),
+      jsonb_build_object('type','state','players',public.gca_game_world_state())
+    );
+    perform public.gca_emit_world('state',jsonb_build_object('players',public.gca_game_world_state()));
+    return jsonb_build_object('events',v_events);
+  elsif p_action='role' then
+    v_id:=p_payload->>'role';
+    if v_id not in ('resident','courier','police','criminal','retail') then raise exception 'Invalid role' using errcode='22023'; end if;
+    if p.wanted or p.jailed_until>v_now then raise exception 'Role unavailable while wanted or in custody' using errcode='22023'; end if;
+    update public.gca_game_players set role=v_id,shift_started_at=null,shift_role=null where user_id=u;
+    v_event:=public.gca_game_wallet_event(u);
+  elsif p_action='outfit' then
+    v_id:=p_payload->>'outfit';
+    if v_id not in ('street','sport','denim','formal','desert','night') then raise exception 'Invalid outfit' using errcode='22023'; end if;
+    update public.gca_game_players set outfit=v_id where user_id=u;
+    v_event:=jsonb_build_object('type','notice','text','Outfit updated');
+  elsif p_action='move' then
+    if jsonb_typeof(p_payload->'x')<>'number' or jsonb_typeof(p_payload->'z')<>'number' or jsonb_typeof(p_payload->'yaw')<>'number'
+    then raise exception 'Invalid position' using errcode='22023'; end if;
+    v_distance:=sqrt(power((p_payload->>'x')::double precision-p.x,2)+power((p_payload->>'z')::double precision-p.z,2));
+    v_dt:=greatest(.08,extract(epoch from (v_now-p.last_move_at)));
+    if abs((p_payload->>'x')::double precision)>10320 or abs((p_payload->>'z')::double precision)>13135
+      or v_distance>35*v_dt+3 then raise exception 'Invalid movement' using errcode='22023'; end if;
+    update public.gca_game_players set x=(p_payload->>'x')::double precision,z=(p_payload->>'z')::double precision,
+      yaw=mod((p_payload->>'yaw')::double precision,6.283185307179586),
+      vehicle=(p.space is null and coalesce((p_payload->>'vehicle')::boolean,false)),
+      last_move_at=v_now,last_seen_at=v_now where user_id=u;
+    perform public.gca_emit_world('state',jsonb_build_object('players',public.gca_game_world_state()));
+    return jsonb_build_object('events','[]'::jsonb);
+  elsif p_action='chat' then
+    v_name:=left(regexp_replace(trim(coalesce(p_payload->>'text','')),'[[:cntrl:]]','','g'),240);
+    if v_name='' or (p.last_chat_at is not null and v_now-p.last_chat_at<interval '800 milliseconds') then
+      return jsonb_build_object('events','[]'::jsonb);
+    end if;
+    update public.gca_game_players set last_chat_at=v_now where user_id=u;
+    perform public.gca_emit_world('chat',jsonb_build_object('name',p.name,'text',v_name));
+    return jsonb_build_object('events',jsonb_build_array(jsonb_build_object('type','chat','name',p.name,'text',v_name)));
+  elsif p_action='enter' then
+    v_id:=p_payload->>'id';
+    if p.space is not null or p.vehicle then raise exception 'Cannot enter from here' using errcode='22023'; end if;
+    select property_id into v_item from public.gca_game_properties where property_id=v_id
+      and (owner_id=u or (tenant_id=u and tenant_expires_at>v_now));
+    if v_item is null then raise exception 'Property access required' using errcode='22023'; end if;
+    if sqrt(power(p.x-case v_id when 'apt-marina-01' then 39 when 'apt-downtown-02' then 112 when 'villa-jumeirah-01' then -97 else 112 end,2)
+       +power(p.z-case v_id when 'apt-marina-01' then 105 when 'apt-downtown-02' then -105 when 'villa-jumeirah-01' then 105 else 105 end,2))>8
+    then raise exception 'Too far from property' using errcode='22023'; end if;
+    v_space:='property:'||v_id;
+    update public.gca_game_players set space=v_space,x=0,z=9,shift_started_at=null where user_id=u;
+    v_event:=jsonb_build_object('type','transition','space',v_space,'x',0,'z',9);
+  elsif p_action='exit' then
+    if p.space is null or p.space='custody' then raise exception 'Cannot exit here' using errcode='22023'; end if;
+    update public.gca_game_players set space=null,shift_started_at=null,x=8,z=12 where user_id=u;
+    v_event:=jsonb_build_object('type','transition','space',null,'x',8,'z',12);
+  elsif p_action='transfer' then
+    v_id:=p_payload->>'number';
+    select user_id into v_other from public.gca_game_players where player_number::text=v_id and user_id<>u;
+    v_amount:=(p_payload->>'amount')::numeric;
+    v_request:=(p_payload->>'requestId')::uuid;
+    if v_other is null then raise exception 'Player is offline or number not found' using errcode='22023'; end if;
+    perform public.gca_transfer_money(v_other,v_amount,v_request);
+    v_event:=public.gca_game_wallet_event(u);
+    perform public.gca_emit_user(v_other,'notice',jsonb_build_object('text','You received AED '||to_char(v_amount,'FM999999990.00')||' from '||p.name));
+    perform public.gca_emit_user(u,'notice',jsonb_build_object('text','Transfer sent'));
+    perform public.gca_emit_user(v_other,'bank',public.gca_game_wallet_event(v_other));
+  elsif p_action='purchase' then
+    if p.space is null or p.space='custody' then raise exception 'Shop purchase unavailable' using errcode='22023'; end if;
+    v_item:=p_payload->>'item';
+    v_amount:=case v_item when 'coffee' then 12 when 'meal' then 30 when 'souvenir' then 45 else null end;
+    if v_amount is null then raise exception 'Item unavailable' using errcode='22023'; end if;
+    select balance into v_balance from public.gca_wallets where user_id=u for update;
+    if v_balance<v_amount then raise exception 'Insufficient funds' using errcode='22023'; end if;
+    update public.gca_wallets set balance=balance-v_amount,updated_at=v_now where user_id=u;
+    update public.gca_game_players set inventory=inventory||jsonb_build_object(v_item,coalesce((inventory->>v_item)::integer,0)+1) where user_id=u;
+    insert into public.gca_ledger(user_id,amount,label,kind) values(u,-v_amount,'Shop purchase','shop');
+    v_event:=public.gca_game_wallet_event(u);
+  elsif p_action='property-acquire' then
+    v_id:=p_payload->>'id';v_mode:=p_payload->>'mode';
+    select buy_price,city_rent,owner_id into v_amount,v_balance,v_other from public.gca_game_properties where property_id=v_id for update;
+    if not found or v_mode not in ('buy','rent') then raise exception 'Property not found' using errcode='22023'; end if;
+    if v_other is not null and v_other<>u then raise exception 'Property already owned' using errcode='22023'; end if;
+    v_amount:=case when v_mode='buy' then v_amount else v_balance end;
+    select balance into v_balance from public.gca_wallets where user_id=u for update;
+    if v_balance<v_amount then raise exception 'Insufficient funds' using errcode='22023'; end if;
+    update public.gca_wallets set balance=balance-v_amount,updated_at=v_now where user_id=u;
+    insert into public.gca_ledger(user_id,amount,label,kind) values(u,-v_amount,case when v_mode='buy' then 'Property purchase' else 'Property rent' end,'property');
+    if v_mode='buy' then update public.gca_game_properties set owner_id=u,tenant_id=null,tenant_expires_at=null,updated_at=v_now where property_id=v_id;
+    else update public.gca_game_properties set tenant_id=u,tenant_expires_at=v_now+interval '30 days',updated_at=v_now where property_id=v_id; end if;
+    v_event:=public.gca_game_wallet_event(u);
+  elsif p_action='property-set-price' then
+    update public.gca_game_properties set rent_price=least(1000000,greatest(0,(p_payload->>'price')::numeric)),updated_at=v_now
+      where property_id=p_payload->>'id' and owner_id=u;
+    if not found then raise exception 'Property not owned' using errcode='22023'; end if;
+    v_event:=jsonb_build_object('type','notice','text','Rent price updated');
+  elsif p_action='job-start' then
+    if p.role<>'courier' then raise exception 'Choose courier role first' using errcode='22023'; end if;
+    update public.gca_game_players set job=1 where user_id=u and job=0;
+    v_event:=public.gca_game_wallet_event(u);
+  elsif p_action='shift' then
+    if not ((p.role='retail' and p.space is not null and p.space<>'custody') or (p.role='police' and p.space is null))
+    then raise exception 'Shift unavailable here' using errcode='22023'; end if;
+    update public.gca_game_players set shift_started_at=v_now,shift_space=space,shift_role=role,shift_distance=0 where user_id=u;
+    v_event:=jsonb_build_object('type','notice','text','Shift started');
+  elsif p_action='rob' then
+    if p.role<>'criminal' or p.space is null or p.space='custody' or p.wanted or (p.last_crime_at is not null and v_now-p.last_crime_at<interval '3 minutes')
+    then raise exception 'Robbery unavailable' using errcode='22023'; end if;
+    update public.gca_game_players set wanted=true,last_crime_at=v_now where user_id=u;
+    update public.gca_wallets set balance=balance+80,updated_at=v_now where user_id=u;
+    insert into public.gca_ledger(user_id,amount,label,kind) values(u,80,'Shop robbery','crime');
+    v_event:=public.gca_game_wallet_event(u);
+  elsif p_action='bail' then
+    select balance into v_balance from public.gca_wallets where user_id=u for update;
+    if not p.wanted and p.jailed_until is null then raise exception 'No bail due' using errcode='22023'; end if;
+    if v_balance<100 then raise exception 'Insufficient funds' using errcode='22023'; end if;
+    update public.gca_wallets set balance=balance-100,updated_at=v_now where user_id=u;
+    insert into public.gca_ledger(user_id,amount,label,kind) values(u,-100,'Bail','bail');
+    update public.gca_game_players set wanted=false,jailed_until=null,space=null where user_id=u;
+    v_event:=public.gca_game_wallet_event(u);
+  elsif p_action in ('dial','answer','hangup') then
+    if p_action='dial' then
+      select user_id into v_other from public.gca_game_players where player_number::text=p_payload->>'number' and last_seen_at>v_now-interval '60 seconds';
+      if v_other is null or v_other=u or p.call_id is not null then raise exception 'Player offline or line busy' using errcode='22023'; end if;
+      if exists(select 1 from public.gca_game_players where user_id=v_other and call_id is not null) then raise exception 'Line busy' using errcode='22023'; end if;
+      insert into public.gca_game_calls(caller_id,callee_id) values(u,v_other) returning * into v_call;
+      update public.gca_game_players set call_id=v_call.id where user_id in (u,v_other);
+      perform public.gca_emit_user(u,'call-ringing',jsonb_build_object('callId',v_call.id,'number',(select player_number::text from public.gca_game_players where user_id=v_other),'name',(select name from public.gca_game_players where user_id=v_other)));
+      perform public.gca_emit_user(v_other,'call-incoming',jsonb_build_object('callId',v_call.id,'number',p.player_number::text,'name',p.name));
+      return jsonb_build_object('events',jsonb_build_array(jsonb_build_object('type','call-ringing','callId',v_call.id,'number',(select player_number::text from public.gca_game_players where user_id=v_other),'name',(select name from public.gca_game_players where user_id=v_other))));
+    end if;
+    v_uuid:=(p_payload->>'callId')::uuid;
+    select * into v_call from public.gca_game_calls where id=v_uuid and u in (caller_id,callee_id) for update;
+    if not found then raise exception 'Call not found' using errcode='22023'; end if;
+    if p_action='answer' and v_call.callee_id=u and v_call.state='ringing' and v_call.expires_at>v_now then
+      update public.gca_game_calls set state='active',answered_at=v_now where id=v_call.id;
+      perform public.gca_emit_user(v_call.caller_id,'call-active',jsonb_build_object('callId',v_call.id));
+      v_event:=jsonb_build_object('type','call-active','callId',v_call.id);
+    else
+      update public.gca_game_calls set state='ended',ended_at=v_now where id=v_call.id;
+      update public.gca_game_players set call_id=null where user_id in (v_call.caller_id,v_call.callee_id);
+      perform public.gca_emit_user(case when u=v_call.caller_id then v_call.callee_id else v_call.caller_id end,'call-ended',jsonb_build_object('callId',v_call.id,'reason','Call ended'));
+      v_event:=jsonb_build_object('type','call-ended','callId',v_call.id,'reason','Call ended');
+    end if;
+  elsif p_action='reset' then
+    update public.gca_game_players set space=null,x=8,z=12,yaw=0,vehicle=false,shift_started_at=null where user_id=u;
+    v_event:=jsonb_build_object('type','transition','space',null,'x',8,'z',12);
+  elsif p_action='arrest' then
+    raise exception 'Arrest unavailable' using errcode='22023';
+  elsif p_action in ('pos-create','pos-answer','property-renew-request','property-renew-answer') then
+    raise exception 'Action validation is still required' using errcode='22023';
+  else
+    v_event:=jsonb_build_object('type','notice','text','Action unavailable');
+  end if;
+
+  if v_event is not null then
+    v_events:=jsonb_build_array(v_event);
+    if v_event->>'type' in ('bank','wallet') then perform public.gca_emit_user(u,'bank',v_event); end if;
+  end if;
+  perform public.gca_emit_world('state',jsonb_build_object('players',public.gca_game_world_state()));
+  return jsonb_build_object('events',v_events);
+end;
+$function$;
+
+revoke all on function public.gca_game_wallet_event(uuid) from public,anon,authenticated;
+revoke all on function public.gca_game_world_state() from public,anon,authenticated;
+revoke all on function public.gca_game_action(text,jsonb) from public,anon;
+grant execute on function public.gca_game_action(text,jsonb) to authenticated;
