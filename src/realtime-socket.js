@@ -12,6 +12,7 @@ export class RealtimeSocket {
     this.readyState=0;this.onopen=null;this.onclose=null;this.onmessage=null;this.onerror=null;
     this.channels=[];this.playerChannels=new Map();this.players=new Map();this.closed=false;
     this.lastCheckpoint=0;this.lastVehicle=null;this.lastState={x:8,z:12,yaw:0,vehicle:false};this.lastChat=0;this.heartbeat=null;
+    this.pendingMovement=null;this.movementPump=null;this.pendingCheckpoint=null;this.checkpointPump=null;
     this.connect();
   }
 
@@ -29,7 +30,7 @@ export class RealtimeSocket {
       await this.addPlayerChannel(this.userId);
       if(this.closed)return this.cleanup();
       this.readyState=1;this.onopen?.();
-      this.heartbeat=setInterval(()=>this.apiAction('move',this.lastState).catch(error=>this.onerror?.(error)),heartbeatMs);
+      this.heartbeat=setInterval(()=>this.queueCheckpoint(this.lastState),heartbeatMs);
     }catch(error){
       this.onerror?.(error);this.readyState=3;await this.cleanup();this.onclose?.();
     }
@@ -105,6 +106,38 @@ export class RealtimeSocket {
     return result;
   }
 
+  queueMovement(state){
+    this.pendingMovement=state;
+    if(this.movementPump)return;
+    this.movementPump=(async()=>{
+      while(this.pendingMovement&&this.readyState===1){
+        const latest=this.pendingMovement;this.pendingMovement=null;
+        let channel=this.playerChannels.get(this.userId);
+        if(!channel){await this.addPlayerChannel(this.userId);channel=this.playerChannels.get(this.userId);}
+        if(!channel)throw new Error('Player channel is not ready');
+        const status=await channel.send({type:'broadcast',event:'player-state',payload:latest});
+        if(status!=='ok')throw new Error('Realtime did not accept movement');
+      }
+    })().catch(error=>this.onerror?.(error)).finally(()=>{
+      this.movementPump=null;
+      if(this.pendingMovement&&this.readyState===1)this.queueMovement(this.pendingMovement);
+    });
+  }
+
+  queueCheckpoint(state){
+    this.pendingCheckpoint=state;
+    if(this.checkpointPump)return;
+    this.checkpointPump=(async()=>{
+      while(this.pendingCheckpoint&&this.readyState===1){
+        const latest=this.pendingCheckpoint;this.pendingCheckpoint=null;
+        try{await this.apiAction('move',latest);}catch(error){this.onerror?.(error);}
+      }
+    })().finally(()=>{
+      this.checkpointPump=null;
+      if(this.pendingCheckpoint&&this.readyState===1)this.queueCheckpoint(this.pendingCheckpoint);
+    });
+  }
+
   async send(raw){
     if(this.readyState!==1)throw new Error('Realtime is not connected');
     let message;try{message=JSON.parse(raw);}catch{return;}
@@ -115,14 +148,11 @@ export class RealtimeSocket {
         const state={x:Number(payload.x),z:Number(payload.z),yaw:Number(payload.yaw),vehicle:payload.vehicle===true};
         if(!Object.values(state).slice(0,3).every(Number.isFinite))return;
         this.lastState=state;
-        let channel=this.playerChannels.get(this.userId);
-        if(!channel){await this.addPlayerChannel(this.userId);channel=this.playerChannels.get(this.userId);}
-        if(!channel)throw new Error('Player channel is not ready');
-        await channel.send({type:'broadcast',event:'player-state',payload:state});
+        this.queueMovement(state);
         const now=Date.now();
         if(now-this.lastCheckpoint>=checkpointMs||state.vehicle!==this.lastVehicle){
           this.lastCheckpoint=now;this.lastVehicle=state.vehicle;
-          await this.apiAction('move',state);
+          this.queueCheckpoint(state);
         }
         return;
       }
