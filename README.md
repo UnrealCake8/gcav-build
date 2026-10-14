@@ -33,9 +33,9 @@ The registration table is preserved. The game uses `gca_profiles`, private `gca_
 
 ## Game
 
-WASD moves or drives. E enters/exits/interacts. P opens the phone. Space brakes. Drag looks around; C recentres the camera. Touch users can move with the joystick and look by dragging the world.
+WASD moves or drives. E enters/exits/interacts. P opens the phone. Space brakes. Drag looks around; C recentres the camera. Touch users can move with the joystick and look by dragging the world. World ambience and a speed-responsive car engine start after entering the city; use Sound in the HUD to mute them.
 
-The city uses OpenStreetMap road and building snapshots for parts of Dubai, five logical Salik gate locations, and geographic landmark anchors. Building rendering uses mapped OSM footprints and the named landmark models; there are no procedurally invented filler buildings. The current footprint snapshot contains 95 buildings between 55.1968769–55.2841935 E and 25.1155707–25.2027428 N, so large parts of the road map still have no mapped buildings. Interiors, traffic and many road elevations remain stylised or incomplete; this is not a complete Dubai reconstruction.
+The city uses OpenStreetMap road and building snapshots for parts of Dubai, five logical Salik gate locations, and geographic landmark anchors. Roads are kept at ground level because the snapshot has no measured elevation data; OSM bridge/layer tags alone are not enough to calculate bridge height. Building rendering uses mapped OSM footprints and the named landmark models; there are no procedurally invented filler buildings. The current footprint snapshot contains 95 buildings between 55.1968769–55.2841935 E and 25.1155707–25.2027428 N, so large parts of the road map still have no mapped buildings. Interiors, traffic and road elevations remain stylised or incomplete; this is not a complete Dubai reconstruction.
 
 Phone apps include Maps, Real Estate, Messages, Jobs, Bank, Account, hPay, Garage, Phone, Outfits and City Life. Jobs and role actions are persisted with the player. Shop checkout requires customer approval; player transfers, purchases, salaries, property payments, bail, robbery and tolls are validated and recorded server-side.
 
