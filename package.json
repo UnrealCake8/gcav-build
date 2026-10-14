@@ -1,13 +1,13 @@
 {
   "name": "gcav-build",
   "version": "1.0.0",
-  "description": "Browser waterfront game with multiplayer and private voice-clip phone",
+  "description": "Browser game with Supabase Realtime multiplayer and authenticated player wallets",
   "main": "index.js",
   "scripts": {
     "build": "esbuild src/game.js --bundle --minify --outfile=dist/game.js",
-    "server": "node --env-file-if-exists=.env server/index.js",
+    "dev": "node --env-file-if-exists=.env server/index.js",
     "test": "node --test server/*.test.js",
-    "start": "node --env-file-if-exists=.env server/index.js"
+    "start": "npm run build && node --env-file-if-exists=.env server/index.js"
   },
   "keywords": [],
   "author": "",
@@ -15,8 +15,7 @@
   "dependencies": {
     "@supabase/supabase-js": "^2.117.3",
     "esbuild": "^0.28.2",
-    "three": "^0.186.1",
-    "ws": "^8.22.0"
+    "three": "^0.186.1"
   },
   "private": true,
   "engines": {
