@@ -1,47 +1,23 @@
-# Road and toll data
+# Midtown Manhattan map data
 
-## Actual imported road data
+The playable map is a geographic snapshot of Midtown Manhattan from NYC Open Data and NYC DOT. It covers the area around Times Square, Bryant Park, Grand Central Terminal, Rockefeller Center and the south edge of Central Park. It is a compact neighborhood, not the whole borough.
 
-`src/data/dubai-roads.json` contains 241 OSM road pieces fetched on 11 October 2026. The source snapshot timestamp is included in the file. The Overpass selection was `highway=motorway|trunk` within latitude 25.11–25.24, longitude 55.18–55.36; full intersecting ways were subsequently clipped to a larger envelope. The snapshot includes parts of E11, D68, E44, E66, D71, D75, D83, D79 and E311. Coverage is regional and incomplete, particularly at the outer boundary. It is not the entire Dubai road network.
+## Imported datasets
 
-Geometry is projected from longitude/latitude around `[55.2744,25.1972]`, then compressed to 25% of geographic horizontal distances. One game metre represents roughly four real-world metres horizontally. Road widths are adjusted for the avatar/car scale; lanes rendered are simplified. OSM way IDs, names, refs, lanes and bridge/layer tags are retained for future refinement.
+| In game | NYC Open Data source | Use |
+| --- | --- | --- |
+| `src/data/manhattan-buildings.json` | [Building Footprints (5zhs-2jue)](https://data.cityofnewyork.us/Housing-Development/Building-Footprints/5zhs-2jue) | Official building polygons and source height fields |
+| `src/data/manhattan-roads.json` | [Street Centerline (CSCL), inkn-q76z](https://data.cityofnewyork.us/City-Government/Street-Centerline-CSCL/inkn-q76z) | Official street centerlines, road names, widths, lanes and direction where available |
+| `src/data/manhattan-signs.json` | [Parking Regulation Locations and Signs (nfid-uabd)](https://data.cityofnewyork.us/Transportation/Parking-Regulation-Locations-and-Signs/nfid-uabd) | NYC DOT parking sign post coordinates and plate descriptions |
 
-The first pass renders the highway network at ground level. Multi-level interchanges, ramps, coastlines, traffic rules and buildings are not geographically reconstructed. The central plaza, access road and buildings are procedural scenery. They are not surveyed Dubai architecture or a navigational map. The previous compact district layout has been replaced by this geographic road backbone.
+The snapshots were retrieved on 14 October 2026 by `scripts/import-manhattan.py`. The script clips the source features to longitude −74.000 to −73.960 and latitude 40.748 to 40.780, then projects them into the game coordinate system at 0.55 scale. Snapshot counts: 8,032 building footprints, 2,294 street segments and 6,309 sign posts. Sign coordinates are transformed from NYC State Plane (EPSG:2263); multiple sign plates at one post are grouped together.
 
-Source: https://www.openstreetmap.org/copyright
-API: https://overpass-api.de/api/interpreter
-OSM node API: https://api.openstreetmap.org/api/0.6/nodes.json
+Building footprints and street segments are source features. Each building renders as one instanced, window-textured rectangular massing box oriented and sized from its source footprint; its exact footprint polygon remains active for collision. This is a lightweight visualization, not a photogrammetric model. A positive source roof height is scaled for gameplay. Twenty-one records without a usable height use a 12 m fallback and carry `heightSource: "estimated-default"`. Roads are rendered at ground level because these datasets do not provide measured vertical clearances. Road widths and lane markings are simplified for the game. Parking sign posts use the NYC DOT source locations; the current renderer uses a shared white regulatory sign appearance rather than typesetting every plate description.
 
-The extracted geographic databases in `src/data/` are available under ODbL 1.0, https://opendatacommons.org/licenses/odbl/1-0/. In-game attribution is visible at the bottom of the screen. This data license does not imply a license for unrelated project code.
+## Public destinations and content
 
-## Salik gate positions
+`src/data/manhattan-landmarks.json` contains public destination anchors for Times Square, the Empire State Building, Grand Central Terminal, Rockefeller Center, Bryant Park and Central Park South. These names are navigation/map annotations; the scene does not add substitute architecture over the official footprint layer. The game does not render alcohol, gambling, adult-entertainment or other adult venue assets. Fictional purchasable property listings have been removed.
 
-`src/data/dubai-gates.json` contains 10 gantry nodes on the imported ways, representing five named gate locations/directional gantries: Al Barsha, Al Safa North, Al Safa South, Al Garhoud Bridge and Business Bay Crossing. These are **not all 10 named Salik gates in Dubai**. Nodes were retrieved via the OSM API. Positions are taken directly from the node coordinates. Node 1061530398 was named “Al Safa South” in OSM despite being next to the Al Safa North carriageway node; its display name is normalised to Al Safa North. The original OSM label is retained in `osmName`. Community map labels and positions can be wrong.
+## Attribution and limits
 
-Official operator sources used for the gameplay tariff:
-
-- Standard schedule: Salik 2024 annual report, https://ar2024.salik.ae/download/full-reports/ar_en_annual-report_pages_salik_2024.pdf
-- Linked Al Safa rule: Salik press release, https://feeds.dfm.ae/documents/2024/Jan/19/525580ae-d331-4e02-b7a0-2e5731bb541f/PRL%20Salik_New%20Gate-%20Final%20-%20E.pdf
-- 5% VAT from 1 June 2026: Salik disclosure, https://feeds.dfm.ae/documents/2026/May/22/2d9de89d-e273-4fad-bc1d-83857588a7af/General%20Disclosure%2022%205%202026%20FVS.Pdf.pdf
-
-The game evaluates the server's real clock in Asia/Dubai. Standard peak periods are 06:00–10:00 and 16:00–20:00; off-peak is AED 4 before VAT, peak is AED 6 before VAT, and 01:00–06:00 is free. Ordinary Sundays use off-peak pricing. `SALIK_SPECIAL_DAY=true` makes Sunday use the normal peak schedule for operator-declared exceptional days. `SALIK_RAMADAN=true` selects the Ramadan schedule. The host manages these switches; the game does not download holiday/event schedules automatically.
-
-A same-direction Al Safa North/South passage within one real hour produces one charge. Gantry jitter and opposite-carriageway duplicates are suppressed. Walking and resetting position do not trigger tolls. This is an in-game simulation, not a Salik account integration or a real billing service.
-
-## Attached terrain scaffold
-
-The supplied `terrain.3mf` contains six meshes, about 140,190 vertices and 267,747 triangles, in millimetres. It has no latitude/longitude metadata. It has not been added to the game or used to place real roads. Importing it later needs a known geographic area, at least two reference coordinates, geometry optimisation and collision preparation.
-
-## Landmark anchors (11 October 2026)
-
-`src/data/dubai-landmarks.json` records coordinates and source IDs. Five anchors are the arithmetic mean of nodes returned by the OpenStreetMap API `/api/0.6/way/{id}/full.json`: Burj Khalifa 446646206; Mall of the Emirates 175115425; Museum of the Future 1054289435; Dubai Frame 386649647; Burj Al Arab 12700546. This representative point is not a surveyed entrance. OSM © contributors, ODbL; existing in-game attribution remains visible.
-
-Dubai Mall uses an approximate POI coordinate 25.198518, 55.279619 from https://www.gps-latitude-longitude.com/gps-coordinates-of-dubai-mall (also corroborated by https://www.coordinatesfinder.com/coordinates/93945-dubai-mall). It is explicitly labeled approximate in the data. Mall geometry is compressed to keep imported highway paths clear. All rendered models/footprints, entrance locations, sidewalks, parking and local connectors are authored approximations, not imported cadastral or architectural data. Height is scaled for gameplay; Burj Khalifa's simplified 207-unit tower represents 828 metres at quarter scale.
-
-Ground cover now includes authored urban paving, parking pads and green-space patches around road corridors and landmarks. These patches are not surveyed land-use polygons or a complete reconstruction of Dubai's coastline/landscape. No sand texture is applied uniformly across the world.
-
-## Real-distance Dubai pass (12 October 2026)
-
-The projection now has horizontalScale=1. Coordinates use a local equirectangular metre approximation around Downtown, not survey-grade geodesy. Earlier quarter-scale references describe prior versions. Building and street extracts were retrieved from the public OSM map API `/api/0.6/map.json?bbox=...` using the two bounding boxes documented in README. ODbL attribution remains in-game and in the data. Reproduction script: `scripts/import-buildings.py`.
-
-95 simple closed building ways are retained; multipolygon relation holes are not imported. Their coordinate extent is 55.1968769–55.2841935 E and 25.1155707–25.2027428 N. This is a partial snapshot, not a complete Dubai building inventory. The renderer uses these mapped footprints plus the separately named real landmark models, and no longer fills unmapped areas with invented building blocks. Height provenance is saved for each outline: 43 `height` tags, 9 `building:levels × 3.2m` estimates, 43 explicitly estimated 10m heights. 394 outdoor street ways retain their geographic nodes; indoor and non-ground parking levels are excluded. Widths are estimated from lane counts; unknown lanes default to two. There is no measured road-elevation dataset, so all roads render at ground level; a `bridge` or `layer` tag alone does not provide a bridge's vertical clearance. Primary reference: https://wiki.openstreetmap.org/wiki/Key:layer . Existing gate coordinates are unchanged; geographic projection rescales their placement automatically.
+The snapshots come from the City of New York / NYC Open Data. See the individual source pages above for dataset metadata and terms. The in-game credit links to NYC Open Data. Data can be incomplete or change over time, and the game snapshot is not an official navigation product. Buildings use simplified extruded footprints, no building interiors are mapped, and no traffic controls or measured road elevations are reconstructed.

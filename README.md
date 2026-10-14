@@ -1,6 +1,6 @@
 # Grand Chamak Auto (GCAV)
 
-GCAV is a browser city game with walking, driving, mapped Dubai roads, city-life jobs, property, shopping, player transfers, multiplayer chat and private push-to-talk calls.
+GCAV is a browser city game with walking, driving, mapped Manhattan roads, city-life jobs, property, shopping, player transfers, multiplayer chat and private push-to-talk calls.
 
 ## Local development
 
@@ -24,7 +24,7 @@ Open `http://localhost:3000`. The local Node process serves static game files an
 ## Online architecture
 
 - Supabase Auth provides guest sessions that can be upgraded to email accounts. The same user ID owns the player profile and wallet across sessions.
-- Supabase Realtime uses authenticated private channels for live movement, room chat, world/player events and call audio/signaling. Live movement is display state; periodic movement checkpoints and all economy/game actions go through authenticated API routes, where Postgres validates positions, proximity, roles, balances, property state, invoices, calls, jobs and Salik before durable changes.
+- Supabase Realtime uses authenticated private channels for live movement, room chat, world/player events and call audio/signaling. Live movement is display state; periodic movement checkpoints and all economy/game actions go through authenticated API routes, where Postgres validates positions, proximity, roles, balances, property state, invoices, calls, jobs and traffic tolls before durable changes.
 - Voice clips are binary, transient Broadcasts. They are not uploaded to Storage or replayed. The receiver acknowledges after accepting a clip into its playback queue, and the sender deletes its in-memory pending copy on acknowledgement, call end, disconnect or timeout.
 - Economy changes and transfers are written with the ledger in Postgres transactions. Retriable actions carry an idempotency UUID; reusing it with a different payload is rejected.
 - The persistent Node WebSocket endpoint, local JSON wallets and HTTP voice-clip endpoints have been retired. Vercel serverless functions handle request/response APIs only; Supabase Realtime provides the persistent multiplayer transport.
@@ -35,9 +35,9 @@ The registration table is preserved. The game uses `gca_profiles`, private `gca_
 
 WASD moves or drives. E enters/exits/interacts. P opens the phone. Space brakes. Drag looks around; C recentres the camera. Touch users can move with the joystick and look by dragging the world. World ambience and a speed-responsive car engine start after entering the city; use Sound in the HUD to mute them.
 
-The city uses OpenStreetMap road and building snapshots for parts of Dubai, five logical Salik gate locations, and geographic landmark anchors. Roads are kept at ground level because the snapshot has no measured elevation data; OSM bridge/layer tags alone are not enough to calculate bridge height. Building rendering uses mapped OSM footprints and the named landmark models; there are no procedurally invented filler buildings. The current footprint snapshot contains 95 buildings between 55.1968769–55.2841935 E and 25.1155707–25.2027428 N, so large parts of the road map still have no mapped buildings. Interiors, traffic and road elevations remain stylised or incomplete; this is not a complete Dubai reconstruction.
+The playable map is Midtown Manhattan, built from NYC Open Data snapshots: official building footprints, street centerlines and NYC DOT parking regulation sign locations. It covers the neighborhood around Times Square, Bryant Park and Grand Central rather than all of Manhattan. Buildings use instanced, window-textured massing boxes oriented and sized from official footprints; exact source outlines remain active for collision. Road locations use source geometries. Twenty-one buildings with no usable source height use an explicitly marked 12 m estimate. The imported map contains 8,032 footprints, 2,294 road segments and 6,309 sign posts. No invented filler buildings, Dubai landmarks, or Salik gantries are rendered. Landmark labels identify public places; no alcohol, gambling or adult venue assets are included. Building geometry is simplified and compressed for gameplay, roads have no surveyed elevation, and parking signs show a generic NYC regulatory style at their mapped posts. This is an approximate game map, not an official navigation product.
 
-Phone apps include Maps, Real Estate, Messages, Jobs, Bank, Account, hPay, Garage, Phone, Outfits and City Life. Jobs and role actions are persisted with the player. Shop checkout requires customer approval; player transfers, purchases, salaries, property payments, bail, robbery and tolls are validated and recorded server-side.
+Phone apps include Maps, Real Estate, Messages, Jobs, Bank, Account, hPay, Garage, Phone, Outfits and City Life. Jobs and role actions are persisted with the player. Shop checkout requires customer approval; player transfers, purchases, salaries, property payments, bail and robbery are validated and recorded server-side.
 
 For push-to-talk, answer a player call, hold Talk or V, speak, then release. Microphone access needs HTTPS or localhost. The browser must support a compatible MediaRecorder codec. Audio is not end-to-end encrypted: the recipient receives it through Supabase Realtime. It is transient and never stored as a clip object or replay row.
 

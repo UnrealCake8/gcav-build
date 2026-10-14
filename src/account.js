@@ -41,7 +41,7 @@ export async function renderAccount(container,escapeHtml){
     root.insertAdjacentHTML('beforeend',`<div class="card"><b>Online account</b><p>${escapeHtml(account.profile?.display_name||'Player')} · ${escapeHtml(account.user.email||'')}</p><h2>AED ${Number(account.wallet.balance).toFixed(2)}</h2><p>Cloud wallet · saved to your account</p><button id="accountSignOut">Sign out</button></div>`);
     for(const entry of account.entries||[]){
       const amount=Number(entry.amount);
-      root.insertAdjacentHTML('beforeend',`<div class="msg"><small>${escapeHtml(new Date(entry.created_at).toLocaleString('en-GB',{timeZone:'Asia/Dubai'}))} GST</small>${escapeHtml(entry.label)}<br><b>${amount>=0?'+':'−'} AED ${Math.abs(amount).toFixed(2)}</b></div>`);
+      root.insertAdjacentHTML('beforeend',`<div class="msg"><small>${escapeHtml(new Date(entry.created_at).toLocaleString('en-GB',{timeZone:'America/New_York'}))} GST</small>${escapeHtml(entry.label)}<br><b>${amount>=0?'+':'−'} AED ${Math.abs(amount).toFixed(2)}</b></div>`);
     }
     root.querySelector('#accountSignOut').onclick=async()=>{await supabase.auth.signOut();await renderAccount(container,escapeHtml);};
   }catch(error){
