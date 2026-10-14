@@ -1,5 +1,6 @@
 const clamp=(v,min,max)=>Math.max(min,Math.min(max,v));
 export const angleDelta=(from,to)=>Math.atan2(Math.sin(to-from),Math.cos(to-from));
+export const cameraFollowAlpha=dt=>1-Math.exp(-Math.max(0,dt)*12);
 export function screenMovement(x,forward,yaw){return {x:x*Math.cos(yaw)-forward*Math.sin(yaw),z:-x*Math.sin(yaw)-forward*Math.cos(yaw)};}
 // One independent gesture owner per surface; joystick pointers never enter this map.
 export function createCameraControls(canvas,{enabled,onChange=()=>{},size=()=>({width:canvas.clientWidth,height:canvas.clientHeight}),now=()=>performance.now()}={}){
