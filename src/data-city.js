@@ -10,13 +10,15 @@ export function createDataCity(scene,{box,mat,addBlocker}){
  const batches=new Map(),geo=new T.BoxGeometry(1,1,1),matrix=new T.Matrix4(),quat=new T.Quaternion();
  function part(w,h,d,x,y,z,m,yaw=0){if(!batches.has(m))batches.set(m,[]);quat.setFromAxisAngle(new T.Vector3(0,1,0),yaw);matrix.compose(new T.Vector3(x,y,z),quat,new T.Vector3(w,h,d));batches.get(m).push(matrix.clone());}
  function strip(a,b,width,y,m){const length=Math.hypot(b.x-a.x,b.z-a.z);if(length<.1)return;part(width,.04,length+.3,(a.x+b.x)/2,y,(a.z+b.z)/2,m,Math.atan2(b.x-a.x,b.z-a.z));}
- for(const road of [...highwayRoads,connector]){for(let i=1;i<road.points.length;i++){const a=road.points[i-1],b=road.points[i],dx=b.x-a.x,dz=b.z-a.z,length=Math.hypot(dx,dz),yaw=Math.atan2(dx,dz);if(length<.1)continue;strip(a,b,road.width,.65,roadmat);
- for(const side of [-1,1]){const ox=Math.cos(yaw)*road.width/2*side,oz=-Math.sin(yaw)*road.width/2*side;strip({x:a.x+ox,z:a.z+oz},{x:b.x+ox,z:b.z+oz},.12,.72,paint);}
- const lanes=Math.min(3,road.lanes||2);for(let n=1;n<lanes;n++){const offset=-road.width/2+road.width*n/lanes;for(let t=3;t<length;t+=10)part(.12,.025,3,a.x+dx*t/length+Math.cos(yaw)*offset,.74,a.z+dz*t/length-Math.sin(yaw)*offset,paint,yaw);}}}
+ const benchSpots=[];function bench(x,z,yaw=0){part(2.3,.16,.62,x,.88,z,stone,yaw);part(2.3,.62,.14,x,1.22,z-.27,stone,yaw);for(const side of [-.82,.82])part(.12,.58,.4,x+side,.6,z,metal,yaw);benchSpots.push({x,z,sitX:x,sitZ:z+.55,yaw:Math.PI});}
+ for(const road of [...highwayRoads,connector]){for(let i=1;i<road.points.length;i++){const a=road.points[i-1],b=road.points[i],dx=b.x-a.x,dz=b.z-a.z,length=Math.hypot(dx,dz),yaw=Math.atan2(dx,dz),deckY=.65+((a.y||0)+(b.y||0))/2;if(length<.1)continue;strip(a,b,road.width,deckY,roadmat);if(deckY>1.5){for(let t=20;t<length;t+=55){const px=a.x+dx*t/length,pz=a.z+dz*t/length;part(1,deckY-.6,1,px,deckY/2+.1,pz,stone);}}
+ for(const side of [-1,1]){const ox=Math.cos(yaw)*road.width/2*side,oz=-Math.sin(yaw)*road.width/2*side;strip({x:a.x+ox,z:a.z+oz},{x:b.x+ox,z:b.z+oz},.12,deckY+.08,paint);}
+ const lanes=Math.min(3,road.lanes||2);for(let n=1;n<lanes;n++){const offset=-road.width/2+road.width*n/lanes;for(let t=3;t<length;t+=10)part(.12,.025,3,a.x+dx*t/length+Math.cos(yaw)*offset,deckY+.1,a.z+dz*t/length-Math.sin(yaw)*offset,paint,yaw);}}}
  // Authored land-cover patches; geography is approximate, highways retain imported coordinates.
  const paving=mat('#bfc0b6'),grass=mat('#728767'),parking=mat('#717b7c');
  for(let k=0;k<highwayRoads.length;k+=3){const r=highwayRoads[k],v=r.points[Math.floor(r.points.length/2)];part(110,.05,95,v.x,.34,v.z,paving);if(k%12===0){part(36,.06,26,v.x+40,.39,v.z+38,grass);part(24,.07,30,v.x-40,.4,v.z+38,parking);for(let n=-2;n<=2;n++)part(9,.03,.15,v.x-40,.47,v.z+38+n*5,paint);}}
  for(const l of landmarks){part(l.w+80,.06,l.d+80,l.x,.36,l.z,paving);part(28,.08,20,l.x-l.w/2-20,.42,l.z,grass);}
+ for(const [x,z,yaw] of [[-24,32,0],[24,32,0],[35,-8,0],[60,-8,0],[85,-8,0],[150,-170,0],[220,-170,0],[126,-130,0],[126,-170,0],[126,-210,0]])bench(x,z,yaw);
  const buildings=renderMappedBuildings(scene,stone,{addBlocker,exclude:b=>landmarks.some(l=>Math.hypot(l.x-b.x,l.z-b.z)<Math.max(l.w,l.d))});
  function building(x,z,w,d,h,index){if(mappedBuildings.some(b=>Math.hypot(x-b.x,z-b.z)<100))return;if(landmarks.some(l=>Math.abs(x-l.x)<l.w/2+w/2+30&&Math.abs(z-l.z)<l.d/2+d/2+30))return;if(buildings.some(b=>Math.abs(x-b.x)<(w+b.w)/2+22&&Math.abs(z-b.z)<(d+b.d)/2+22))return;if(landmarks.some(l=>pointSegmentDistance({x,z},l.entrance,nearestRoad(l.entrance).point)<Math.hypot(w,d)/2+6))return;if(nearestRoad({x,z}).distance<Math.hypot(w,d)/2+14)return;box(w,h,d,x,h/2+.4,z,index%3===0?white:glass,true);buildings.push({x,z,w,d});part(w+1,.5,d+1,x,h+.7,z,metal);for(let y=4;y<h;y+=5)part(w+.15,.12,d+.15,x,y,z,stone);}
  // Buildings remain procedural; the drivable highway centre-lines come from OSM.
@@ -43,5 +45,5 @@ export function createDataCity(scene,{box,mat,addBlocker}){
  for(let k=0;k<highwayRoads.length;k+=8){const r=highwayRoads[k],v=r.points[Math.floor(r.points.length/2)];for(const side of [-1,1]){const x=v.x+side*(r.width/2+3);part(.15,6,.15,x,3,v.z,metal);part(1,.2,1,x,6,v.z,glow);}}
  for(const [m,items]of batches){const instanced=new T.InstancedMesh(geo,m,items.length);items.forEach((v,i)=>instanced.setMatrixAt(i,v));instanced.receiveShadow=true;if(m===roadmat)instanced.renderOrder=2;if(m===paint)instanced.renderOrder=3;instanced.computeBoundingSphere();scene.add(instanced);}
  const group=new T.Group();for(const o of [...scene.children])if(!existing.has(o))group.attach(o);scene.add(group);
- return {group,update(time,day=1){glow.emissiveIntensity=(1-day)*2;glass.emissive.set('#d9ad63');glass.emissiveIntensity=(1-day)*.35;},map:{park:{x:-12,z:15,w:20,d:15},villas:[],shops:[],downtown:buildings}};
+ return {group,benchSpots,update(time,day=1){glow.emissiveIntensity=(1-day)*2;glass.emissive.set('#d9ad63');glass.emissiveIntensity=(1-day)*.35;},map:{park:{x:-12,z:15,w:20,d:15},villas:[],shops:[],downtown:buildings}};
 }
