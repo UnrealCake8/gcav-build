@@ -1,4 +1,4 @@
-import data from './data/dubai-gates.json' with {type:'json'};
+import data from './data/manhattan-gates.json' with {type:'json'};
 import {project,nearestRoad} from './road-network.js';
 export const tollGates=data.gates.map(g=>{const pos=project(g.lon,g.lat),road=nearestRoad(pos);return {...g,...pos,yaw:road.yaw,width:road.road.width+1};});
 export function tollRate(date=new Date(),{specialDay=false,ramadan=false}={}){const parts=Object.fromEntries(new Intl.DateTimeFormat('en-GB',{timeZone:'Asia/Dubai',weekday:'short',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).formatToParts(date).map(p=>[p.type,p.value]));const h=Number(parts.hour)+Number(parts.minute)/60,sunday=parts.weekday==='Sun'&&!specialDay;const free=ramadan?(h>=2&&h<7):(h>=1&&h<6);const peak=ramadan?(h>=9&&h<17):((h>=6&&h<10)||(h>=16&&h<20));const base=free?0:!sunday&&peak?6:4;const vat=date>=new Date('2026-06-01T00:00:00+04:00')?.05:0;return {base,vat:Math.round(base*vat*100)/100,total:Math.round(base*(1+vat)*100)/100,period:free?'Free hours':!sunday&&peak?'Peak':'Off-peak'};}

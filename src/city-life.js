@@ -1,16 +1,11 @@
-import data from './data/dubai-landmarks.json' with {type:'json'};
-import {project} from './road-network.js';
-const details={ 'burj-khalifa':['Burj Khalifa','tower',24,24,828], 'dubai-mall':['Dubai Mall','mall',40,32,12], 'mall-emirates':['Mall of the Emirates','mall',40,32,12], 'museum-future':['Museum of the Future','museum',35,25,20], 'dubai-frame':['Dubai Frame','frame',38,12,38], 'burj-arab':['Burj Al Arab','hotel',28,22,80] };
-export const landmarks=data.landmarks.map(p=>{const [name,kind,w,d,h]=details[p.id];const {x,z}=project(p.lon,p.lat);return {...p,name,kind,w,d,h,x,z,entrance:{x:x+w/2+5,z}};});
+import data from './data/manhattan-landmarks.json' with {type:'json'};
+import {project,nearestRoad} from './road-network.js';
+export const landmarks=data.landmarks.map(p=>{const {x,z}=project(p.lon,p.lat),road=nearestRoad({x,z});const entrance=road?{x:road.point.x+Math.cos(road.yaw)*(road.road.width/2+3),z:road.point.z-Math.sin(road.yaw)*(road.road.width/2+3)}:{x,z};return {...p,x,z,w:0,d:0,h:0,entrance};});
 export const roles=[{id:'resident',name:'Civilian',description:'Explore, meet players and shop.'},{id:'courier',name:'Delivery courier',description:'Collect parcels and earn delivery rewards.'},{id:'police',name:'Police officer',description:'Patrol for a salary and arrest wanted players.'},{id:'criminal',name:'Criminal',description:'Risk a shop robbery, arrest and bail.'},{id:'retail',name:'Shop worker',description:'Work a 60-second shop shift for AED 25.'}];
 export const validRole=id=>roles.some(r=>r.id===id);
-export const propertyListings=[
- {id:'apt-marina-01',name:'Marina View Studio',kind:'apartment',rooms:1,buyPrice:450,rentPrice:80,x:34,z:105,entrance:{x:39,z:105}},
- {id:'apt-downtown-02',name:'Downtown Family Apartment',kind:'apartment',rooms:3,buyPrice:1800,rentPrice:200,x:105,z:-105,entrance:{x:112,z:-105}},
- {id:'villa-jumeirah-01',name:'Jumeirah Garden Villa',kind:'house',rooms:4,buyPrice:7500,rentPrice:800,x:-105,z:105,entrance:{x:-97,z:105}},
- {id:'villa-waterfront-02',name:'Waterfront Townhouse',kind:'house',rooms:3,buyPrice:4200,rentPrice:450,x:105,z:105,entrance:{x:112,z:105}}
-];
-export const catalogue=[{id:'coffee',name:'Coffee',price:12},{id:'meal',name:'Lunch',price:30},{id:'souvenir',name:'City souvenir',price:45}];
+// No fictional addresses or purchasable buildings: the playable footprints are sourced features.
+export const propertyListings=[];
+export const catalogue=[{id:'coffee',name:'Coffee',price:12},{id:'meal',name:'Meal',price:30},{id:'souvenir',name:'City souvenir',price:45}];
 export const insideRoom=(x,z,r=0)=>Math.abs(x)<=21-r&&Math.abs(z)<=13-r;
 export const cycleMs=24*60*1000;
 export function worldHour(now,epoch){return ((9+(now-epoch)/cycleMs*24)%24+24)%24;}

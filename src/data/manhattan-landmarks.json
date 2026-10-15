@@ -1,0 +1,11 @@
+{
+  "source": "NYC Open Data and official destination coordinates",
+  "landmarks": [
+    {"id":"times-square","name":"Times Square","kind":"public-square","lon":-73.9855,"lat":40.7580},
+    {"id":"empire-state-building","name":"Empire State Building","kind":"landmark","lon":-73.9857,"lat":40.7484},
+    {"id":"grand-central-terminal","name":"Grand Central Terminal","kind":"public-transit","lon":-73.9772,"lat":40.7527},
+    {"id":"rockefeller-center","name":"Rockefeller Center","kind":"public-landmark","lon":-73.9787,"lat":40.7587},
+    {"id":"bryant-park","name":"Bryant Park","kind":"public-park","lon":-73.9832,"lat":40.7536},
+    {"id":"central-park-south","name":"Central Park South","kind":"public-park","lon":-73.9819,"lat":40.7681}
+  ]
+}
